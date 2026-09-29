@@ -104,6 +104,31 @@
     gap:12mm!important;
     margin:12mm 0!important
   }
+  .quotePaper thead{
+    display:table-header-group!important
+  }
+  .quotePaper tfoot{
+    display:table-footer-group!important
+  }
+  .quoteRepeatHeader{
+    display:table-row!important;
+    page-break-inside:avoid!important
+  }
+  .quoteRepeatHeader>th{
+    background:#fff!important;
+    padding:0 0 8px!important;
+    border:0!important;
+    text-align:left!important
+  }
+  .quoteRepeatHeader .quoteBrand{
+    width:100%!important;
+    display:flex!important
+  }
+  .quoteRepeatHeader hr{
+    margin:8px 0 0!important;
+    border:0!important;
+    border-top:1px solid #dfe4eb!important
+  }
   .quotePaper table{
     display:table!important;
     width:100%!important;
