@@ -20,7 +20,7 @@ export default function Login() {
     e.preventDefault(); setLoading(true); setMessage("");
     if(mode==="signup"){
       if(password!==confirmPassword){ setMessage("Passwords do not match."); setLoading(false); return; }
-      const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:"https://lead2sales-ai.vercel.app/"}});
+      const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:(process.env.NEXT_PUBLIC_SITE_URL||"https://lead2sales-ai-retro-team1.vercel.app").replace(/\/$/,"")+"/"}});
       if(error) setMessage(error.message);
       else if(data.user){ if(data.session){ router.replace("/onboarding"); } else { setMessage("Account created. Check your email to confirm your account, then sign in."); } }
     } else {
