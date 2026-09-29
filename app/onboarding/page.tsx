@@ -11,6 +11,9 @@ export default function Onboarding(){
   e.preventDefault(); setLoading(true); setMsg("");
   const {data:{user}}=await supabase.auth.getUser();
   if(!user){router.replace("/login");return;}
+  const {data:existing,error:existingError}=await supabase.from("company_members").select("company_id,created_at").eq("user_id",user.id).order("created_at",{ascending:false}).limit(1);
+  if(existingError){setMsg(existingError.message);setLoading(false);return;}
+  if(existing?.[0]?.company_id){localStorage.setItem("lead2sales_company_id",existing[0].company_id);router.replace("/");return;}
   const companyId=crypto.randomUUID();
   const {error:companyError}=await supabase.from("companies").insert({id:companyId,name:business});
   if(companyError){setMsg(companyError.message);setLoading(false);return;}
