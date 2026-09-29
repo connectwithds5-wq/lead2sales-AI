@@ -5,6 +5,9 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 
 export default function Login() {
+ async function restoreWorkspace(userId:string){const {data,error}=await supabase.from("company_members").select("company_id,created_at").eq("user_id",userId).order("created_at",{ascending:false}).limit(1);if(error) throw error;const companyId=data?.[0]?.company_id;if(companyId){localStorage.setItem("lead2sales_company_id",companyId);return true;}return false;}
+
+
   const router=useRouter();
   const [mode,setMode]=useState<"login"|"signup">("login");
   const [email,setEmail]=useState("");
@@ -14,7 +17,7 @@ export default function Login() {
   const [message,setMessage]=useState("");
   const [loading,setLoading]=useState(false);
 
-  useEffect(()=>{supabase.auth.getSession().then(({data})=>{if(data.session) router.replace("/");});},[router]);
+  useEffect(()=>{supabase.auth.getSession().then(async({data})=>{if(data.session){try{const restored=await restoreWorkspace(data.session.user.id);router.replace(restored?"/":"/onboarding");}catch{router.replace("/onboarding");}}});},[router]);
 
   async function submit(e:React.FormEvent){
     e.preventDefault(); setLoading(true); setMessage("");
@@ -24,8 +27,8 @@ export default function Login() {
       if(error) setMessage(error.message);
       else if(data.user){ if(data.session){ router.replace("/onboarding"); } else { setMessage("Account created. Check your email to confirm your account, then sign in."); } }
     } else {
-      const {error}=await supabase.auth.signInWithPassword({email,password});
-      if(error) setMessage(error.message); else router.replace("/");
+      const {data,error}=await supabase.auth.signInWithPassword({email,password});
+      if(error) setMessage(error.message); else { try { const restored=await restoreWorkspace(data.user.id); router.replace(restored?"/":"/onboarding"); } catch(e:any){ setMessage(e?.message||"Could not load your workspace."); } }
     }
     setLoading(false);
   }
