@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 
 export default function Login() {
- async function restoreWorkspace(userId:string){const {data,error}=await supabase.from("company_members").select("company_id,created_at").eq("user_id",userId).order("created_at",{ascending:false}).limit(1);if(error) throw error;const companyId=data?.[0]?.company_id;if(companyId){localStorage.setItem("lead2sales_company_id",companyId);return true;}return false;}
+ async function restoreWorkspace(userId:string){const {data,error}=await supabase.from("company_members").select("company_id,created_at").eq("user_id",userId).order("created_at",{ascending:false});if(error) throw error;if(!data?.length)return false;let best=data[0],bestScore=-1;for(const m of data){const [l,q,p]=await Promise.all([supabase.from("leads").select("id",{count:"exact",head:true}).eq("company_id",m.company_id),supabase.from("quotations").select("id",{count:"exact",head:true}).eq("company_id",m.company_id),supabase.from("product_catalog").select("id",{count:"exact",head:true}).eq("company_id",m.company_id)]);const score=(l.count||0)*100000+(q.count||0)*1000+(p.count||0);if(score>bestScore){bestScore=score;best=m;}}localStorage.setItem("lead2sales_company_id",best.company_id);return true;}
 
 
   const router=useRouter();
