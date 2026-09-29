@@ -11,9 +11,9 @@ export default function Onboarding(){
   e.preventDefault(); setLoading(true); setMsg("");
   const {data:{user}}=await supabase.auth.getUser();
   if(!user){router.replace("/login");return;}
-  const {data:existing,error:existingError}=await supabase.from("company_members").select("company_id,created_at").eq("user_id",user.id).order("created_at",{ascending:false}).limit(1);
+  const {data:existing,error:existingError}=await supabase.from("company_members").select("company_id,created_at").eq("user_id",user.id).order("created_at",{ascending:false});
   if(existingError){setMsg(existingError.message);setLoading(false);return;}
-  if(existing?.[0]?.company_id){localStorage.setItem("lead2sales_company_id",existing[0].company_id);router.replace("/");return;}
+  if(existing?.length){let best=existing[0],bestScore=-1;for(const m of existing){const [l,q,p]=await Promise.all([supabase.from("leads").select("id",{count:"exact",head:true}).eq("company_id",m.company_id),supabase.from("quotations").select("id",{count:"exact",head:true}).eq("company_id",m.company_id),supabase.from("product_catalog").select("id",{count:"exact",head:true}).eq("company_id",m.company_id)]);const score=(l.count||0)*100000+(q.count||0)*1000+(p.count||0);if(score>bestScore){bestScore=score;best=m;}}localStorage.setItem("lead2sales_company_id",best.company_id);router.replace("/");return;}
   const companyId=crypto.randomUUID();
   const {error:companyError}=await supabase.from("companies").insert({id:companyId,name:business});
   if(companyError){setMsg(companyError.message);setLoading(false);return;}
