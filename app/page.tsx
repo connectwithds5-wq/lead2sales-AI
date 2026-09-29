@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "./lib/supabase";
+import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 
 type Lead={id:string;name:string;company_name:string|null;requirement:string;status:string;estimated_value:number;created_at:string};
