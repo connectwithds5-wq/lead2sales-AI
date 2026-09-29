@@ -18,7 +18,7 @@ export default function Login() {
   async function submit(e:React.FormEvent){
     e.preventDefault(); setLoading(true); setMessage("");
     if(mode==="signup"){
-      const {data,error}=await supabase.auth.signUp({email,password});
+      const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:"https://lead2sales-ai.vercel.app/"}});
       if(error) setMessage(error.message);
       else if(data.user){ setMessage("Account created. Check your email if confirmation is enabled."); router.replace("/onboarding"); }
     } else {
