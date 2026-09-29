@@ -9,6 +9,7 @@ export default function Login() {
   const [mode,setMode]=useState<"login"|"signup">("login");
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
+  const [confirmPassword,setConfirmPassword]=useState("");
   const [name,setName]=useState("");
   const [message,setMessage]=useState("");
   const [loading,setLoading]=useState(false);
@@ -18,6 +19,7 @@ export default function Login() {
   async function submit(e:React.FormEvent){
     e.preventDefault(); setLoading(true); setMessage("");
     if(mode==="signup"){
+      if(password!==confirmPassword){ setMessage("Passwords do not match."); setLoading(false); return; }
       const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:"https://lead2sales-ai.vercel.app/"}});
       if(error) setMessage(error.message);
       else if(data.user){ if(data.session){ router.replace("/onboarding"); } else { setMessage("Account created. Check your email to confirm your account, then sign in."); } }
@@ -37,6 +39,7 @@ export default function Login() {
       {mode==="signup"&&<label>Business / owner name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name or business" required /></label>}
       <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" required /></label>
       <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Minimum 6 characters" minLength={6} required /></label>
+      {mode==="signup"&&<label>Confirm Password<input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Re-enter your password" minLength={6} required /></label>}
       {message&&<div className="message">{message}</div>}
       <button className="primary full" disabled={loading}>{loading?"Please wait…":mode==="login"?"Sign in":"Create free account"}</button>
     </form>
