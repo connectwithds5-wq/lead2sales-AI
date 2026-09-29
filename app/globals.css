@@ -30,12 +30,13 @@
     margin:0!important;
     padding:0!important;
     background:#fff!important;
-    overflow:visible!important
+    overflow:hidden!important
   }
   body *{visibility:hidden!important}
   .overlay,.overlay *{visibility:visible!important}
   .overlay{
-    position:static!important;
+    position:fixed!important;
+    inset:0!important;
     display:block!important;
     width:100%!important;
     min-width:0!important;
@@ -44,7 +45,9 @@
     margin:0!important;
     padding:0!important;
     background:#fff!important;
-    overflow:visible!important
+    overflow:hidden!important;
+    page-break-after:avoid!important;
+    break-after:avoid-page!important
   }
   .quoteModal{
     position:static!important;
@@ -63,13 +66,13 @@
   }
   .quoteActions{display:none!important}
   .quotePaper{
-    position:static!important;
+    position:relative!important;
     display:block!important;
-    width:100%!important;
-    max-width:none!important;
-    min-width:0!important;
-    min-height:0!important;
-    height:auto!important;
+    width:210mm!important;
+    max-width:210mm!important;
+    min-width:210mm!important;
+    min-height:297mm!important;
+    height:297mm!important;
     margin:0!important;
     padding:10mm 12mm!important;
     box-sizing:border-box!important;
@@ -77,7 +80,9 @@
     color:#1d2635!important;
     border:0!important;
     box-shadow:none!important;
-    overflow:visible!important
+    overflow:hidden!important;
+    page-break-after:avoid!important;
+    break-after:avoid-page!important
   }
   .quoteBrand{
     display:flex!important;
