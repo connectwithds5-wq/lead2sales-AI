@@ -15,12 +15,7 @@
     min-width:0!important
   }
   .content{
-    display:block!important;
-    width:210mm!important;
-    max-width:210mm!important;
-    min-width:210mm!important;
-    margin:0!important;
-    padding:0!important
+    display:none!important
   }
   html,body{
     position:relative!important;
