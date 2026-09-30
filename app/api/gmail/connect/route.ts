@@ -16,5 +16,5 @@ export async function GET(request:NextRequest){
   if(!member) return NextResponse.json({error:"You do not have access to this workspace."},{status:403});
   const state=signState({user_id:user.id,company_id:cid,exp:Date.now()+10*60*1000});
   const params=new URLSearchParams({client_id:clientId,redirect_uri:googleRedirectUri(),response_type:"code",access_type:"offline",prompt:"consent",scope:"openid email profile https://www.googleapis.com/auth/gmail.send",state});
-  return NextResponse.redirect("https://accounts.google.com/o/oauth2/v2/auth?"+params.toString());
+  return NextResponse.json({url:"https://accounts.google.com/o/oauth2/v2/auth?"+params.toString()});
 }
