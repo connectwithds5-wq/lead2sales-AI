@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || "create");
-    const domain = String(body?.domain || "").trim().toLowerCase().replace(/^https?:\\/\\//, "").replace(/\\/.*$/, "");
+    const domain = String(body?.domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     if (action === "create") {
       if (!domain || !domain.includes(".") || domain.includes("@")) return NextResponse.json({ error: "Enter a valid business domain, such as example.com." }, { status: 400 });
       if (["gmail.com","googlemail.com","outlook.com","hotmail.com","live.com","yahoo.com","icloud.com"].includes(domain)) {
