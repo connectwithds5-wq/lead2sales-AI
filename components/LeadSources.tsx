@@ -164,19 +164,6 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
     setEmailProvisioning(false);
   }
 
-  async function connectMailbox(provider:"google"|"microsoft"){
-    const cid=localStorage.getItem("lead2sales_company_id");
-    if(!cid)return;
-    setError("");
-    const {data}=await supabase.auth.getSession();
-    const token=data.session?.access_token;
-    if(!token){setError("Session expired. Please sign in again.");return;}
-    const r=await fetch("/api/email-connect/"+provider,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({companyId:cid})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){setError(j.error||"Could not start email connection.");return;}
-    window.location.href=j.url;
-  }
-
   function copyLink() {
     if (!token) return;
     void navigator.clipboard.writeText(url);
@@ -242,11 +229,7 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
 
             <div className="masterHint" style={{ marginTop: 12 }}>
               <b>📧 Email → Automatic Lead</b><br />
-              Connect the business mailbox once. Lead2Sales will watch new incoming mail and turn relevant enquiries into leads, categories and initial BOQs.
-            </div>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <button className="ghost" type="button" onClick={()=>void connectMailbox("google")}>Connect Gmail</button>
-              <button className="ghost" type="button" onClick={()=>void connectMailbox("microsoft")}>Connect Outlook / Microsoft 365</button>
+              Enable email capture below. Lead2Sales will create a dedicated receiving address for this workspace.
             </div>
             <label>
               Your Lead2Sales inbound email
