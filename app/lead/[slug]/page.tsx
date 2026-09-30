@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
 export default function PublicLeadPage({params}:{params:Promise<{slug:string}>}){
-  const [slug,setSlug]=useState("");
+  const [token,setToken]=useState("");
   const [source,setSource]=useState<any>(null);
   const [form,setForm]=useState({name:"",company:"",phone:"",email:"",requirement:""});
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false); const [done,setDone]=useState(false); const [error,setError]=useState("");
 
-  useEffect(()=>{params.then(p=>setSlug(p.slug))},[params]);
-  useEffect(()=>{if(!slug)return;(async()=>{const {data,error}=await supabase.from("lead_capture_sources").select("slug,whatsapp_number,whatsapp_message,enabled").eq("slug",slug).eq("enabled",true).maybeSingle();if(error||!data)setError("This enquiry link is not active.");else setSource(data);setLoading(false)})()},[slug]);
+  useEffect(()=>{params.then(p=>setToken(p.slug))},[params]);
+  useEffect(()=>{if(!token)return;(async()=>{const {data,error}=await supabase.rpc("get_public_lead_source",{p_token:token});const row=Array.isArray(data)?data[0]:data;if(error||!row)setError("This enquiry link is not active.");else setSource(row);setLoading(false)})()},[token]);
 
-  async function submit(e:React.FormEvent){e.preventDefault();setSaving(true);setError("");const {error}=await supabase.rpc("submit_public_lead",{p_slug:slug,p_name:form.name,p_company_name:form.company,p_phone:form.phone,p_email:form.email,p_requirement:form.requirement});if(error)setError(error.message);else setDone(true);setSaving(false);}
+  async function submit(e:React.FormEvent){e.preventDefault();setSaving(true);setError("");const {error}=await supabase.rpc("submit_public_lead",{p_token:token,p_name:form.name,p_company_name:form.company,p_phone:form.phone,p_email:form.email,p_requirement:form.requirement});if(error)setError(error.message);else setDone(true);setSaving(false);}
   if(loading)return <main className="publicLead"><div className="publicLeadCard"><p>Loading enquiry form…</p></div></main>;
   if(error&&!source)return <main className="publicLead"><div className="publicLeadCard"><h1>Lead2Sales</h1><p>{error}</p></div></main>;
   if(done)return <main className="publicLead"><div className="publicLeadCard success"><div className="publicLeadIcon">✓</div><h1>Thanks! Your enquiry is received.</h1><p>Our sales team will contact you shortly.</p>{source?.whatsapp_number&&<a className="publicWhatsApp" href={"https://wa.me/"+String(source.whatsapp_number).replace(/\D/g,"")+"?text="+encodeURIComponent(source.whatsapp_message||"Hi, I need a quotation.")} target="_blank" rel="noreferrer">Continue on WhatsApp</a>}</div></main>;
