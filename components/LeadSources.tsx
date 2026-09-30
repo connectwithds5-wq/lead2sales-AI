@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+type EmailLeadSource = { id:string; inbound_address:string; enabled:boolean };
+
 type LeadSource = {
   id: string;
   slug: string;
@@ -21,6 +23,10 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [emailSource, setEmailSource] = useState<EmailLeadSource|null>(null);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [emailSaving, setEmailSaving] = useState(false);
 
   async function load() {
     const cid = localStorage.getItem("lead2sales_company_id");
@@ -35,6 +41,9 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
       .select("id,slug,public_token,whatsapp_number,whatsapp_message,enabled")
       .eq("company_id", cid)
       .maybeSingle();
+
+    const { data: emailData } = await supabase.from("email_lead_sources").select("id,inbound_address,enabled").eq("company_id", cid).maybeSingle();
+    if (emailData) { setEmailSource(emailData as EmailLeadSource); setEmailAddress(emailData.inbound_address || ""); setEmailEnabled(Boolean(emailData.enabled)); }
 
     if (loadError) {
       setError(loadError.message);
@@ -123,6 +132,18 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
         ? "/lead/" + token
         : "Save this source to generate the secure public link.";
 
+  async function saveEmailSource() {
+    const cid = localStorage.getItem("lead2sales_company_id");
+    if (!cid || !emailAddress.trim()) { setError("Enter the Resend inbound email address first."); return; }
+    setEmailSaving(true); setError("");
+    const result = emailSource
+      ? await supabase.from("email_lead_sources").update({inbound_address:emailAddress.trim().toLowerCase(),enabled:emailEnabled,updated_at:new Date().toISOString()}).eq("id",emailSource.id).eq("company_id",cid).select("id,inbound_address,enabled").single()
+      : await supabase.from("email_lead_sources").insert({company_id:cid,inbound_address:emailAddress.trim().toLowerCase(),enabled:emailEnabled}).select("id,inbound_address,enabled").single();
+    if (result.error) setError(result.error.message);
+    else if (result.data) { setEmailSource(result.data as EmailLeadSource); setEmailAddress(result.data.inbound_address); setEmailEnabled(Boolean(result.data.enabled)); }
+    setEmailSaving(false);
+  }
+
   function copyLink() {
     if (!token) return;
     void navigator.clipboard.writeText(url);
@@ -185,6 +206,22 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
             </label>
 
             {error && <div className="message">{error}</div>}
+
+            <div className="masterHint" style={{ marginTop: 12 }}>
+              <b>📧 Email → Automatic Lead</b><br />
+              Configure a Resend receiving address below. Customer enquiry emails sent or forwarded there will become Lead2Sales leads, get a category, and receive an initial BOQ.
+            </div>
+            <label>
+              Resend inbound email address
+              <input value={emailAddress} onChange={e=>setEmailAddress(e.target.value)} placeholder="leads@your-resend-inbound-domain" />
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <input type="checkbox" checked={emailEnabled} onChange={e=>setEmailEnabled(e.target.checked)} style={{width:18}} />
+              Create leads from incoming emails
+            </label>
+            <button className="ghost" type="button" onClick={saveEmailSource} disabled={emailSaving}>
+              {emailSaving ? "Saving…" : "Save Email Lead Source"}
+            </button>
 
             <button className="primary" onClick={save} disabled={saving}>
               {saving ? "Saving…" : "Save Lead Source"}
