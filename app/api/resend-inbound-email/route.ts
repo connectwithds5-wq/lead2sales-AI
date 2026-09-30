@@ -22,6 +22,12 @@ function extractEmail(v:string){const m=v.match(/<([^>]+)>/)||v.match(/[A-Z0-9._
 function extractName(v:string,email:string){const m=v.match(/^"?([^"<]+?)"?\s*</);if(m?.[1])return m[1].trim();return email?email.split("@")[0].replace(/[._-]+/g," ").replace(/\b\w/g,x=>x.toUpperCase()):"Email Enquiry";}
 function extractPhone(t:string){const m=t.match(/(?:\+?91[\s.-]?)?[6-9]\d{9}\b/);return m?m[0].replace(/[^\d+]/g,""):"";}
 function extractValue(t:string){const m=t.match(/(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)/i);return m?Number(m[1].replace(/,/g,"")):0;}
+function cleanEmailBody(t:string){
+  let body=t.replace(/\r\n/g,"\n").replace(/\r/g,"\n").trim();
+  body=body.replace(/^(?:From|Date|Sent|To|Cc|Subject):[^\n]*\n(?:(?:From|Date|Sent|To|Cc|Subject):[^\n]*\n)+\s*/i,"");
+  body=body.replace(/^\s*(?:From|Date|Sent):[^\n]*\n(?:To|Cc|Subject):[^\n]*\n(?:Subject):[^\n]*\n\s*/i,"");
+  return body.replace(/\n{3,}/g,"\n\n").trim();
+}
 
 export async function POST(req:NextRequest){
   const secret=process.env.RESEND_WEBHOOK_SECRET, resendKey=process.env.RESEND_API_KEY, url=process.env.NEXT_PUBLIC_SUPABASE_URL, serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -46,7 +52,7 @@ export async function POST(req:NextRequest){
   const fromRaw=String(detail.from||event.data.from||"");
   const senderEmail=extractEmail(fromRaw);
   const subject=String(detail.subject||event.data.subject||"").trim();
-  const body=String(detail.text||detail.html||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+  const body=cleanEmailBody(String(detail.text||detail.html||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim());
   const requirement=[subject,body].filter(Boolean).join(" — ").slice(0,10000);
   const leadId=crypto.randomUUID();
   const {error:leadError}=await admin.from("leads").insert({id:leadId,company_id:source.company_id,name:extractName(fromRaw,senderEmail),company_name:null,phone:extractPhone(requirement)||null,email:senderEmail||null,requirement,status:"new",estimated_value:extractValue(requirement),source:"email",lead_category:classify(requirement)});
