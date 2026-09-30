@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { recommendRequirement } from "../../../../lib/recommendations";
+import { recommendRequirement } from "../../../lib/recommendations";
 
 export const runtime = "nodejs";
 
