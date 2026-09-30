@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         from,
         to: [recipient],
+        ...(company?.email ? { reply_to: company.email } : {}),
         subject: `Quotation ${quotation.quotation_no} — ${companyName}`,
         html,
         attachments: [
