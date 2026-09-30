@@ -87,14 +87,14 @@ function EmailSettings({onClose,onSaved}:{onClose:()=>void,onSaved:()=>void}){
  const [saving,setSaving]=useState(false);
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
- const [dns,setDns]=useState<any[]>([]);
+ const [dns,setDns]=useState<any[]>([]); const [gmail,setGmail]=useState<any>({connected:false,email:null});
  const publicDomains=["gmail.com","googlemail.com","outlook.com","hotmail.com","live.com","yahoo.com","icloud.com"];
  async function token(){const s=await supabase.auth.getSession();return s.data.session?.access_token||""}
  async function load(){
   setLoading(true);setError("");
   const cid=localStorage.getItem("lead2sales_company_id");
   if(cid){const {data}=await supabase.from("companies").select("email").eq("id",cid).single();setEmail(data?.email||"")}
-  try{const t=await token();if(!t)throw new Error("Your session has expired. Please sign in again.");const res=await fetch("/api/email-domain",{headers:{Authorization:"Bearer "+t}});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"Could not load email domains.");setDomains(data.domains||[])}catch(e:any){setError(e.message||"Could not load email setup.")}finally{setLoading(false)}
+  try{const t=await token();if(!t)throw new Error("Your session has expired. Please sign in again.");const companyId=cid||"";const gr=await fetch("/api/gmail/status?company_id="+encodeURIComponent(companyId),{headers:{Authorization:"Bearer "+t}});const gd=await gr.json().catch(()=>({}));if(gr.ok)setGmail(gd);const res=await fetch("/api/email-domain",{headers:{Authorization:"Bearer "+t}});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"Could not load email domains.");setDomains(data.domains||[])}catch(e:any){setError(e.message||"Could not load email setup.")}finally{setLoading(false)}
  }
  useEffect(()=>{void load()},[]);
  const emailDomain=email.includes("@")?email.split("@").pop()?.toLowerCase()||"":"";const mailboxOnly=publicDomains.includes(emailDomain);
@@ -133,7 +133,7 @@ function EmailSettings({onClose,onSaved}:{onClose:()=>void,onSaved:()=>void}){
    </div>)}
    {dns.length>0&&<div className="message"><b>DNS records for the newly added domain</b>{dns.map((r:any,i:number)=><div key={i} style={{marginTop:8}}>{r.type} · {r.name} · {r.value||r.record}</div>)}</div>}
    {message&&<div className="message">{message}</div>}{error&&<div className="message">{error}</div>}
-   <div style={{background:"#f8fafc",borderRadius:14,padding:14,color:"#475569"}}><b>How sending works</b><p style={{margin:"6px 0 0"}}>Verified business domain = quotation From address. Company email above = Reply-To. If no business domain is verified yet, Lead2Sales uses the platform sender and still routes replies to your saved company email.</p></div>
+   <div style={{border:"1px solid #e2e8f0",borderRadius:16,padding:18}}><div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap"}}><div><span className="eyebrow">GMAIL SENDING</span><h3 style={{margin:"4px 0"}}>Send quotations directly from Gmail</h3><p style={{margin:0,color:"#64748b"}}>{gmail.connected?<>Connected as <b>{gmail.email}</b></>:<>Connect Gmail securely with Google OAuth. Lead2Sales never asks for your Gmail password.</>}</p></div>{gmail.connected?<button className="ghost" onClick={async()=>{const t=await token();const res=await fetch("/api/gmail/disconnect",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({company_id:localStorage.getItem("lead2sales_company_id")})});const d=await res.json().catch(()=>({}));if(!res.ok){setError(d.error||"Could not disconnect Gmail.");return}setGmail({connected:false,email:null});setMessage("Gmail disconnected.")}}>Disconnect</button>:<button className="primary" onClick={()=>{const cid=localStorage.getItem("lead2sales_company_id");token().then(t=>{window.location.href="/api/gmail/connect?company_id="+encodeURIComponent(cid||"")+"&token="+encodeURIComponent(t)})}}>Connect Gmail</button>}</div></div><div style={{background:"#f8fafc",borderRadius:14,padding:14,color:"#475569"}}><b>How sending works</b><p style={{margin:"6px 0 0"}}>{gmail.connected?"Gmail connected = quotations are sent from the connected Gmail address.":"Verified business domain = quotation From address. Company email above = Reply-To. If no Gmail or business domain is connected yet, Lead2Sales uses the platform sender and routes replies to your saved company email."}</p></div>
   </div>
  </div></div>
 }
