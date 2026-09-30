@@ -20,6 +20,8 @@ const firstNumber = (t: string, patterns: RegExp[]) => {
   return 0;
 };
 
+const ceilTo = (n: number, step: number) => Math.ceil(n / step) * step;
+
 const addUnique = (out: Recommendation[], x: Recommendation) => {
   const key = (y: Recommendation) => [y.category, y.item_name].join("|").toLowerCase();
   if (!out.some((y) => key(y) === key(x))) out.push(x);
@@ -55,21 +57,40 @@ export function recommendRequirement(input: string): Recommendation[] {
   ]) || 30;
 
   if (cameras > 0) {
-    const nvr = cameras <= 8 ? 8 : cameras <= 16 ? 16 : cameras <= 32 ? 32 : 64;
-    const poePorts = cameras <= 4 ? 8 : cameras <= 8 ? 8 : cameras <= 16 ? 16 : cameras <= 24 ? 24 : 48;
+    // Presales sizing: keep recorder headroom and size PoE by both ports and power.
+    // NVR: current cameras + 20% expansion/headroom, then select the next standard tier.
+    const requiredChannels = Math.ceil(cameras * 1.2);
+    const nvr = requiredChannels <= 8 ? 8 : requiredChannels <= 16 ? 16 : requiredChannels <= 32 ? 32 : requiredChannels <= 64 ? 64 : requiredChannels <= 128 ? 128 : 256;
+
+    // Fixed-camera planning assumption: 15 W/camera + 20% PoE headroom.
+    // 48-port PoE+ class is used for high-density CCTV; 740 W is a common enterprise tier.
+    const cameraPortsPerSwitch = cameras <= 8 ? 8 : cameras <= 16 ? 16 : cameras <= 24 ? 24 : 48;
+    const switchCount = Math.max(1, Math.ceil(cameras / cameraPortsPerSwitch));
+    const poeBudgetRequired = Math.ceil(cameras * 15 * 1.2);
+    const poeBudgetPerSwitch = Math.ceil(poeBudgetRequired / switchCount);
+
     const cableMeters = cameras * 60;
-    const storageTb = Math.max(1, Math.ceil((cameras * 0.18 * 24 * retention) / 1000));
+
+    // Storage is bitrate-driven, not a fixed camera-count multiplier.
+    // Default planning assumption: H.265, 4 Mbps/camera, 24x7 recording.
+    const motionFactor = has(t, ["motion recording", "motion only", "event recording", "event only"]) ? 0.4 : 1;
+    const planningBitrateMbps = 4;
+    const rawStorageTb = (cameras * planningBitrateMbps * 10.8 * retention * motionFactor) / 1000;
+    const storageTb = Math.max(1, Math.ceil(rawStorageTb * 1.2));
 
     addUnique(out, { category:"CCTV", subcategory:"IP Camera", item_name:"IP Camera", specification:"IP camera, PoE, H.265/H.265+, IR night vision; megapixel/lens/type to be confirmed", quantity:cameras, unit:"Nos", reason:"Exact camera quantity parsed from customer requirement.", required:true });
-    addUnique(out, { category:"CCTV", subcategory:"NVR", item_name:nvr+" Channel NVR", specification:nvr+" Channel H.265/H.265+ NVR; final model based on camera resolution/features", quantity:1, unit:"Nos", reason:"NVR channel capacity sized above the camera count.", required:true });
-    addUnique(out, { category:"Storage", subcategory:"Surveillance HDD", item_name:"Surveillance HDD", specification:"Surveillance-grade HDD; estimated for "+retention+"-day retention; final sizing after bitrate/resolution confirmation", quantity:storageTb, unit:"TB", reason:"Planning estimate from camera count and requested/default retention.", required:true, review_required:true });
-    addUnique(out, { category:"Network", subcategory:"PoE Switch", item_name:poePorts+" Port PoE Switch", specification:poePorts+" Port PoE switch with adequate PoE budget and uplink; final sizing after topology review", quantity:1, unit:"Nos", reason:"PoE/network capacity sized for camera count.", required:true });
+    addUnique(out, { category:"CCTV", subcategory:"NVR", item_name:nvr+" Channel NVR", specification:nvr+" Channel H.265/H.265+ NVR; minimum "+requiredChannels+" channels required after 20% headroom; confirm incoming bandwidth, decoding and HDD bays against final camera bitrate/resolution", quantity:1, unit:"Nos", reason:"NVR sized from "+cameras+" cameras plus 20% design headroom ("+requiredChannels+" channels required).", required:true, review_required:true });
+    addUnique(out, { category:"Storage", subcategory:"Surveillance HDD", item_name:"Surveillance Storage - "+storageTb+" TB", specification:"Surveillance-grade storage target "+storageTb+" TB including 20% design headroom; planning basis "+planningBitrateMbps+" Mbps/camera, H.265, "+(motionFactor<1?"motion/event recording":"24x7 continuous recording")+", "+retention+" days. Final HDD count/RAID must match NVR supported bays and drive size.", quantity:storageTb, unit:"TB", reason:"Calculated from camera bitrate × camera count × recording time × retention, then 20% design headroom.", required:true, review_required:true });
+    addUnique(out, { category:"Network", subcategory:"PoE Switch", item_name:cameraPortsPerSwitch+" Port PoE+ Managed Switch", specification:cameraPortsPerSwitch+"-port Gigabit PoE+ managed switch; total PoE budget requirement ≈ "+poeBudgetRequired+" W, so provide "+switchCount+" switch(es) with at least "+poeBudgetPerSwitch+" W PoE budget each; uplinks to CCTV aggregation/core", quantity:switchCount, unit:"Nos", reason:"PoE sized from "+cameras+" cameras at 15 W/camera with 20% power headroom and "+cameraPortsPerSwitch+"-port switch density.", required:true, review_required:true });
     addUnique(out, { category:"Cable", subcategory:"CCTV Cabling", item_name:"CAT6 Cable - CCTV", specification:"CAT6 UTP; planning allowance 60 m per camera; final route length after site survey", quantity:cableMeters, unit:"Meter", reason:"60 m average planning allowance × "+cameras+" cameras.", required:true, review_required:true });
     addUnique(out, { category:"Cable", subcategory:"RJ45 Connector", item_name:"RJ45 CAT6 Connector - CCTV", specification:"RJ45 connectors for both ends of CCTV CAT6 runs", quantity:cameras*2, unit:"Nos", reason:"Two termination ends per camera run.", required:false });
     addUnique(out, { category:"CCTV", subcategory:"Junction Box", item_name:"CCTV Junction Box", specification:"Junction/mounting box suitable for selected camera", quantity:cameras, unit:"Nos", reason:"One mounting/junction accessory per camera.", required:false });
-    addUnique(out, { category:"Network", subcategory:"Patch Panel", item_name:"CAT6 Patch Panel - CCTV", specification:"Patch panel sized for CCTV terminations; port count to be confirmed with LAN topology", quantity:Math.max(1,Math.ceil(cameras/24)), unit:"Nos", reason:"Central termination for CCTV cabling.", required:false });
+    const patchPanels = Math.max(1, Math.ceil(cameras / 24));
+    addUnique(out, { category:"Network", subcategory:"Patch Panel", item_name:"CAT6 Patch Panel - CCTV", specification:"24-port loaded CAT6 patch panel for CCTV terminations; "+patchPanels+" panels provide "+(patchPanels*24)+" ports for "+cameras+" camera runs", quantity:patchPanels, unit:"Nos", reason:"Patch panel capacity calculated as 24 ports per panel for "+cameras+" camera runs.", required:false });
     addUnique(out, { category:"Network", subcategory:"Patch Cord", item_name:"CAT6 Patch Cord - CCTV", specification:"Rack-side CAT6 patch cords", quantity:cameras, unit:"Nos", reason:"Rack-side patching for camera links.", required:false });
-    addUnique(out, { category:"IT Infrastructure", subcategory:"Rack", item_name:"Network Rack", specification:"Rack sized for NVR, PoE switch, patch panels, PDU and accessories", quantity:1, unit:"Nos", reason:"Central equipment mounting.", required:false });
+    const estimatedRackU = 2 + (switchCount * 1) + (patchPanels * 1) + 1 + 2 + 2;
+    const rackSizeU = estimatedRackU <= 18 ? 18 : estimatedRackU <= 27 ? 27 : estimatedRackU <= 42 ? 42 : 45;
+    addUnique(out, { category:"IT Infrastructure", subcategory:"Rack", item_name:rackSizeU+"U Network Rack", specification:rackSizeU+"U floor/wall rack sized for "+nvr+"-channel NVR, "+switchCount+" PoE switch(es), "+patchPanels+" patch panel(s), PDU, cable management and UPS/interface accessories", quantity:1, unit:"Nos", reason:"Rack size estimated from active CCTV equipment and termination hardware.", required:false, review_required:true });
     addUnique(out, { category:"IT Infrastructure", subcategory:"PDU", item_name:"Rack PDU", specification:"Rack-mount PDU with adequate sockets", quantity:1, unit:"Nos", reason:"Rack power distribution.", required:false });
     addUnique(out, { category:"IT Infrastructure", subcategory:"UPS", item_name:"UPS", specification:"UPS sized from actual NVR/switch/network load and required backup time", quantity:1, unit:"Nos", reason:"Backup power for active equipment.", required:false, review_required:true });
     addUnique(out, { category:"Service", subcategory:"Site Survey", item_name:"Site Survey & CCTV Consultation", specification:"Camera placement, viewing angle, cable route, power, network and recording validation", quantity:1, unit:"Job", reason:"Required to validate assumptions and final scope.", required:true });
@@ -218,9 +239,22 @@ export function recommendRequirement(input: string): Recommendation[] {
     addUnique(out, { category:"Service", subcategory:"AMC", item_name:"AMC / Maintenance", specification:"Maintenance scope, SLA, visits and response time to be confirmed", quantity:1, unit:"Year", reason:"AMC/maintenance requirement detected.", required:false, review_required:true });
   }
 
+  // Vehicle gate / boom barrier
+  const barrierQty = firstNumber(t, [
+    /(\d+)\s*(?:boom\s*barriers?|boom\s*gates?|barrier\s*gates?|gate\s*barriers?)/,
+    /(?:boom\s*barriers?|boom\s*gates?|barrier\s*gates?|gate\s*barriers?)\s*(?:x|:|of)?\s*(\d+)\b/,
+  ]);
+  const barrierMentioned = has(t, ["boom barrier","boom gate","barrier gate","gate barrier","vehicle barrier","automatic barrier"]);
+  if (barrierMentioned) {
+    const bq = barrierQty || 1;
+    addUnique(out, { category:"Access Control", subcategory:"Vehicle Barrier", item_name:"Automatic Boom Barrier Gate", specification:"Automatic boom barrier for vehicle entry/exit; arm length, duty cycle, mounting and control interface to be confirmed", quantity:bq, unit:"Nos", reason:barrierQty ? "Exact barrier quantity parsed from customer requirement." : "Vehicle barrier was explicitly mentioned; quantity defaulted to 1 pending confirmation.", required:true, review_required:!barrierQty });
+    addUnique(out, { category:"Access Control", subcategory:"Vehicle Barrier", item_name:"Vehicle Barrier Safety / Loop Detector", specification:"Inductive loop detector and safety sensing/access interface for each barrier lane; final arrangement to suit site traffic design", quantity:bq, unit:"Set", reason:"Safety/accessory package sized one set per barrier lane.", required:false, review_required:true });
+    addUnique(out, { category:"Service", subcategory:"Vehicle Barrier", item_name:"Boom Barrier Installation & Commissioning", specification:"Mechanical installation, controller wiring, safety sensor/loop integration, access interface and testing", quantity:bq, unit:"Nos", reason:"Installation and commissioning per barrier lane.", required:true });
+  }
+
   // Explicit manual-review triggers for technical scopes we don't yet have a safe quantity model for.
   const manualSignals = [
-    "boom barrier","barrier gate","turnstile","parking","pa system","public address","speaker",
+    "turnstile","pa system","public address","speaker",
     "amplifier","epabx","ip phone","telephone","solar","gate automation","home automation",
     "smart home","bms","fire hydrant","fire fighting","sprinkler","water leak","gps",
     "tracking","vehicle tracking","asset tracking","visitor management","time attendance"
@@ -232,6 +266,8 @@ export function recommendRequirement(input: string): Recommendation[] {
     }
   }
 
+  // Do not silently lose a requirement. Unknown scopes remain internal review items,
+  // while known scopes above produce customer-ready BOQ lines.
   if (!out.length) manual(out, "Requirement could not be classified", input);
   return out;
 }
