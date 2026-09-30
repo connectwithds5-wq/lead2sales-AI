@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -99,6 +101,31 @@ export async function POST(request: NextRequest) {
         <p>Regards,<br><strong>${escapeHtml(companyName)}</strong>${company?.phone ? `<br>${escapeHtml(company.phone)}` : ""}${company?.email ? `<br>${escapeHtml(company.email)}` : ""}</p>
       </div>
     `;
+
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey) {
+      const admin = createClient(supabaseUrl, serviceKey);
+      const { data: gmail } = await admin.from("email_connections").select("id,email_address,access_token_encrypted,refresh_token_encrypted,expires_at,enabled").eq("company_id",quotation.company_id).eq("provider","google").eq("enabled",true).maybeSingle();
+      if (gmail?.refresh_token_encrypted || gmail?.access_token_encrypted) {
+        try {
+          let accessToken = gmail.access_token_encrypted ? decryptToken(gmail.access_token_encrypted) : "";
+          if (!gmail.expires_at || new Date(gmail.expires_at).getTime() < Date.now()+60000) {
+            if (!gmail.refresh_token_encrypted) throw new Error("Gmail connection needs to be reconnected.");
+            const rr=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:process.env.GOOGLE_CLIENT_ID||"",client_secret:process.env.GOOGLE_CLIENT_SECRET||"",refresh_token:decryptToken(gmail.refresh_token_encrypted),grant_type:"refresh_token"})});
+            const rt=await rr.json().catch(()=>({}));
+            if(!rr.ok||!rt.access_token) throw new Error(rt.error_description||"Could not refresh Gmail access.");
+            accessToken=rt.access_token;
+            await admin.from("email_connections").update({access_token_encrypted:encryptToken(accessToken),expires_at:new Date(Date.now()+Number(rt.expires_in||3600)*1000).toISOString(),updated_at:new Date().toISOString()}).eq("id",gmail.id);
+          }
+          const boundary="l2s_"+crypto.randomUUID().replace(/-/g,"");
+          const mime=[`From: ${mimeHeader(companyName)} <${gmail.email_address}>`,`To: ${recipient}`,`Subject: ${mimeHeader(`Quotation ${quotation.quotation_no} — ${companyName}`)}`,"MIME-Version: 1.0",`Content-Type: multipart/mixed; boundary="${boundary}"`,"",`--${boundary}`,"Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: 8bit","",html,"",`--${boundary}`,"Content-Type: application/pdf; name="+filename,"Content-Disposition: attachment; filename="+filename,"Content-Transfer-Encoding: base64","",pdfBase64.match(/.{1,76}/g)?.join("\r\n")||pdfBase64,"",`--${boundary}--`].join("\r\n");
+          const gr=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({raw:base64Url(mime)})});
+          const gd=await gr.json().catch(()=>({}));
+          if(!gr.ok) throw new Error(gd?.error?.message||"Gmail rejected the message.");
+          return NextResponse.json({ok:true,id:gd?.id||null,to:recipient,provider:"gmail"});
+        } catch(e) { console.error("Gmail send failed:",e); }
+      }
+    }
 
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
