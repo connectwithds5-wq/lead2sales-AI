@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { encryptToken } from "../../../../lib/oauth-crypto";
+import { encryptToken } from "../../../../../lib/oauth-crypto";
 export const runtime="nodejs";
 function readState(s:string){const [p,sig]=s.split(".");if(!p||!sig||!process.env.OAUTH_STATE_SECRET)return null;const ok=createHmac("sha256",process.env.OAUTH_STATE_SECRET).update(p).digest("base64url")===sig;if(!ok)return null;const v=JSON.parse(Buffer.from(p,"base64url").toString());return v.exp>Date.now()?v:null;}
 export async function GET(req:NextRequest){
