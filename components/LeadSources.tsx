@@ -26,6 +26,7 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
   const [emailSource, setEmailSource] = useState<EmailLeadSource|null>(null);
   const [emailAddress, setEmailAddress] = useState("");
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [emailProvisioning, setEmailProvisioning] = useState(false);
   const [emailSaving, setEmailSaving] = useState(false);
 
   async function load() {
@@ -43,7 +44,11 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
       .maybeSingle();
 
     const { data: emailData } = await supabase.from("email_lead_sources").select("id,inbound_address,enabled").eq("company_id", cid).maybeSingle();
-    if (emailData) { setEmailSource(emailData as EmailLeadSource); setEmailAddress(emailData.inbound_address || ""); setEmailEnabled(Boolean(emailData.enabled)); }
+    if (emailData) {
+      setEmailSource(emailData as EmailLeadSource);
+      setEmailAddress(emailData.inbound_address || "");
+      setEmailEnabled(Boolean(emailData.enabled));
+    }
 
     if (loadError) {
       setError(loadError.message);
@@ -134,14 +139,29 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
 
   async function saveEmailSource() {
     const cid = localStorage.getItem("lead2sales_company_id");
-    if (!cid || !emailAddress.trim()) { setError("Enter the Resend inbound email address first."); return; }
-    setEmailSaving(true); setError("");
-    const result = emailSource
-      ? await supabase.from("email_lead_sources").update({inbound_address:emailAddress.trim().toLowerCase(),enabled:emailEnabled,updated_at:new Date().toISOString()}).eq("id",emailSource.id).eq("company_id",cid).select("id,inbound_address,enabled").single()
-      : await supabase.from("email_lead_sources").insert({company_id:cid,inbound_address:emailAddress.trim().toLowerCase(),enabled:emailEnabled}).select("id,inbound_address,enabled").single();
-    if (result.error) setError(result.error.message);
-    else if (result.data) { setEmailSource(result.data as EmailLeadSource); setEmailAddress(result.data.inbound_address); setEmailEnabled(Boolean(result.data.enabled)); }
-    setEmailSaving(false);
+    if (!cid) return;
+    setEmailProvisioning(true);
+    setError("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setError("Session expired. Please sign in again.");
+      setEmailProvisioning(false);
+      return;
+    }
+    const response = await fetch("/api/email-lead-source", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ companyId: cid, enabled: emailEnabled }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error || "Could not provision email lead capture.");
+    else if (result.source) {
+      setEmailSource(result.source as EmailLeadSource);
+      setEmailAddress(result.source.inbound_address);
+      setEmailEnabled(Boolean(result.source.enabled));
+    }
+    setEmailProvisioning(false);
   }
 
   function copyLink() {
@@ -209,18 +229,18 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
 
             <div className="masterHint" style={{ marginTop: 12 }}>
               <b>📧 Email → Automatic Lead</b><br />
-              Configure a Resend receiving address below. Customer enquiry emails sent or forwarded there will become Lead2Sales leads, get a category, and receive an initial BOQ.
+              Lead2Sales automatically creates a unique receiving address for this workspace. Forward customer enquiry emails there and they will become leads, get a category, and receive an initial BOQ.
             </div>
             <label>
-              Resend inbound email address
-              <input value={emailAddress} onChange={e=>setEmailAddress(e.target.value)} placeholder="leads@your-resend-inbound-domain" />
+              Your Lead2Sales inbound email
+              <input value={emailAddress || "Click Enable to generate your address"} readOnly />
             </label>
             <label style={{ display:"flex", alignItems:"center", gap:10 }}>
               <input type="checkbox" checked={emailEnabled} onChange={e=>setEmailEnabled(e.target.checked)} style={{width:18}} />
               Create leads from incoming emails
             </label>
-            <button className="ghost" type="button" onClick={saveEmailSource} disabled={emailSaving}>
-              {emailSaving ? "Saving…" : "Save Email Lead Source"}
+            <button className="ghost" type="button" onClick={saveEmailSource} disabled={emailProvisioning}>
+              {emailProvisioning ? "Creating…" : emailAddress ? "Update Email Lead Capture" : "Enable Email Lead Capture"}
             </button>
 
             <button className="primary" onClick={save} disabled={saving}>
@@ -229,7 +249,7 @@ export default function LeadSources({ onClose }: { onClose: () => void }) {
 
             <div className="masterHint">
               <b>Security:</b><br />
-              The public URL contains a random source token, not your company ID. The token is generated by the database and cannot be reassigned through the dashboard. Every submitted lead is attached to the source's locked workspace.
+              Customers never see or enter Resend API keys, Supabase service keys, or webhook secrets. Those stay on Lead2Sales infrastructure. Each workspace gets its own receiving address and incoming emails are locked to that workspace.
             </div>
 
             <div className="masterHint">
