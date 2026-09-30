@@ -204,3 +204,5 @@
 .boqEditRow input{width:100%;min-width:0;padding:9px 10px;border:1px solid #dfe3ea;border-radius:9px;background:#fff}
 .boqInternal{grid-column:1/-1;font-size:12px;font-weight:700;color:#8a5a00;background:#fff7df;border-radius:7px;padding:5px 8px;width:max-content}
 @media(max-width:900px){.boqEditRow{grid-template-columns:1fr 1fr}.boqInternal{grid-column:1/-1}.boqEditorHead{align-items:flex-start;flex-direction:column}}
+
+.leadFilters{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:8px;align-items:center}.leadCategory{display:inline-block;margin-right:6px;padding:2px 6px;border-radius:999px;background:#eef2f6;color:#657084;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}@media(max-width:650px){.leadFilters{grid-template-columns:1fr}}
