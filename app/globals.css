@@ -57,7 +57,7 @@
     border-radius:0!important;
     box-shadow:none!important
   }
-  .quoteActions{display:none!important}
+  .quoteActions,.boqEditor{display:none!important}
   .quotePaper{
     position:relative!important;
     display:block!important;
