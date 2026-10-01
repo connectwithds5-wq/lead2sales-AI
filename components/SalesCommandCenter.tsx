@@ -194,23 +194,21 @@ export default function SalesCommandCenter(){
      const quoteNumber=existing?.quotation_no||quoteNo;
      const printSource=document.querySelector(".ccBoqPrintPaper") as HTMLElement | null;
      if(!printSource) throw new Error("BOQ print preview is not available.");
-     // Capture the print-preview document inside a full A4 canvas so no left/right content is clipped.
+     // Reuse the proven mobile-safe capture surface: a visible fixed clone of the
+     // exact print-preview DOM. This avoids empty canvases on Android Chrome.
      const printable=printSource.cloneNode(true) as HTMLElement;
-     const capturePage=document.createElement("div");
-     capturePage.className="ccBoqPdfCapturePage";
-     capturePage.style.cssText="display:block;visibility:visible;position:fixed;left:0;top:0;z-index:2147483647;width:210mm;min-height:297mm;background:#fff;margin:0;padding:0;box-sizing:border-box;overflow:visible;";
      printable.classList.add("ccBoqPdfCapture");
      printable.style.setProperty("display","block","important");
      printable.style.setProperty("visibility","visible","important");
-     printable.style.setProperty("position","static","important");
+     printable.style.setProperty("position","fixed","important");
+     printable.style.setProperty("left","0","important");
+     printable.style.setProperty("top","0","important");
+     printable.style.setProperty("z-index","2147483647","important");
+     printable.style.setProperty("background","#fff","important");
      printable.style.setProperty("width","188mm","important");
-     printable.style.setProperty("min-width","188mm","important");
-     printable.style.setProperty("max-width","188mm","important");
-     printable.style.setProperty("margin","0 auto","important");
      printable.style.setProperty("height","auto","important");
-     capturePage.appendChild(printable);
-     document.body.appendChild(capturePage);
-     capturePage.querySelectorAll("*").forEach((el)=>{
+     document.body.appendChild(printable);
+     printable.querySelectorAll("*").forEach((el)=>{
        const node=el as HTMLElement;
        node.style.setProperty("visibility","visible","important");
      });
@@ -226,18 +224,19 @@ export default function SalesCommandCenter(){
          allowTaint:true,
          backgroundColor:"#ffffff",
          logging:false,
-         width:794,
-         windowWidth:794,
-         windowHeight:1123
+         width:printable.scrollWidth,
+         height:printable.scrollHeight,
+         windowWidth:Math.max(document.documentElement.clientWidth,printable.scrollWidth),
+         windowHeight:Math.max(document.documentElement.clientHeight,printable.scrollHeight)
        },
        jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true},
        pagebreak:{mode:["css","legacy"]}
-     }).from(capturePage);
+     }).from(printable);
      await worker.toCanvas();
      const canvas=await worker.get("canvas");
      if(!canvas || canvas.width<10 || canvas.height<10) throw new Error("BOQ PDF renderer produced an empty canvas.");
      const pdfDataUri=await worker.toPdf().outputPdf("datauristring");
-     capturePage.remove();
+     printable.remove();
      const filename="Quotation-"+quoteNumber+".pdf";
      const pdfBase64=String(pdfDataUri).split(",")[1]||"";
      if(!pdfBase64) throw new Error("Could not generate the BOQ PDF.");
