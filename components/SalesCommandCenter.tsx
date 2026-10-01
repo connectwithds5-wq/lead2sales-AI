@@ -205,7 +205,6 @@ export default function SalesCommandCenter(){
        image:{type:"jpeg",quality:0.96},
        html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",windowWidth:printable.scrollWidth,windowHeight:printable.scrollHeight,logging:false},
        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
-       pagebreak:{mode:["css","legacy"]}
      }).from(printable).outputPdf("datauristring");
      printable.remove();
      const filename="Quotation-"+quoteNumber+".pdf";
