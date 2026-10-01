@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
-import { createQuotationPdf } from "../../../lib/quotationPdf";
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -63,13 +62,6 @@ export async function POST(request: NextRequest) {
     }
 
     const lead = Array.isArray(quotation.leads) ? quotation.leads[0] : quotation.leads;
-    const { data: quoteItems, error: itemsError } = await supabase
-      .from("quotation_items")
-      .select("item_name,specification,quantity,unit,unit_price")
-      .eq("quotation_id", quoteId)
-      .order("created_at", { ascending: true });
-    if (itemsError) return NextResponse.json({ error: "Could not load quotation items." }, { status: 500 });
-
     const recipient = String(lead?.email || "").trim();
     if (!recipient) {
       return NextResponse.json({ error: "Customer has no email address. Add the customer's email in the lead first." }, { status: 400 });
@@ -81,20 +73,7 @@ export async function POST(request: NextRequest) {
       .eq("id", quotation.company_id)
       .single();
 
-    // Generate the attachment from saved quotation data on the server.
-    // Do not trust the browser-generated PDF; it was producing blank attachments.
-    const finalPdfBase64 = await createQuotationPdf({
-      companyName: company?.legal_name || company?.name || "Lead2Sales",
-      quotationNo: quotation.quotation_no,
-      customerName: lead?.name || "Customer",
-      requirement: lead?.requirement || "",
-      items: quoteItems || [],
-      subtotal: Number(quotation.subtotal || 0),
-      gstPercent: Number(quotation.gst_percent || 0),
-      gstAmount: Number(quotation.gst_amount || 0),
-      grandTotal: Number(quotation.grand_total || 0),
-    });
-    const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
+    // Use the exact PDF generated from the BOQ print-preview DOM in the browser.\n    const finalPdfBase64 = pdfBase64;\n    const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
     const companyName = company?.legal_name || company?.name || "Lead2Sales";
     const customerName = lead?.name || "Customer";
