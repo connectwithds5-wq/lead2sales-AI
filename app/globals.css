@@ -239,6 +239,23 @@
     display:none!important
   }
 
+  /* Explicitly restore the three structural print nodes hidden by body>div *. */
+  .ccAppShell .ccMainContent>.ccWrap>.ccModalBackdrop:has(.ccBoqModal){
+    display:block!important;visibility:visible!important;position:static!important;
+    width:auto!important;height:auto!important;min-height:0!important;margin:0!important;padding:0!important;
+    background:#fff!important;overflow:visible!important
+  }
+  .ccAppShell .ccMainContent>.ccWrap>.ccModalBackdrop:has(.ccBoqModal)>.ccBoqModal{
+    display:block!important;visibility:visible!important;position:static!important;
+    width:auto!important;max-width:none!important;min-width:0!important;
+    height:auto!important;max-height:none!important;min-height:0!important;
+    margin:0!important;padding:0!important;background:#fff!important;
+    border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important
+  }
+  .ccAppShell .ccMainContent>.ccWrap>.ccModalBackdrop:has(.ccBoqModal)>.ccBoqModal>.ccBoqPrintPaper{
+    display:block!important;visibility:visible!important
+  }
+
   .ccAppShell{
     display:block!important;position:static!important;width:100%!important;max-width:none!important;
     height:auto!important;min-height:0!important;margin:0!important;padding:0!important;
