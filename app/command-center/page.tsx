@@ -13,3 +13,5 @@ export default function CommandCenterPage(){
 // Sync A4 BOQ print preview styles.
 
 // Deploy professional legacy BOQ print document design.
+
+// Trigger production rebuild after BOQ PDF build fix.
