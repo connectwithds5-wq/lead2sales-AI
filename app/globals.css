@@ -256,6 +256,50 @@
     display:block!important;visibility:visible!important
   }
 
+  /* The generic print isolation rule above intentionally hides descendants.
+     Restore only the real quotation sections, while leaving table display types native. */
+  .ccAppShell .ccBoqPrintPaper .ccPrintFirstHeader{
+    display:block!important;visibility:visible!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintBrand{
+    display:flex!important;visibility:visible!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintBrand>div{
+    display:block!important;visibility:visible!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintBrand small,
+  .ccAppShell .ccBoqPrintPaper .ccPrintMeta,
+  .ccAppShell .ccBoqPrintPaper .ccPrintMeta b,
+  .ccAppShell .ccBoqPrintPaper .ccPrintMeta span,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBillTo,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBillTo>div,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBillTo small,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBillTo b,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBillTo span,
+  .ccAppShell .ccBoqPrintPaper hr,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBottom,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBottom>div,
+  .ccAppShell .ccBoqPrintPaper .ccPrintTotals,
+  .ccAppShell .ccBoqPrintPaper .ccPrintTotals span,
+  .ccAppShell .ccBoqPrintPaper .ccPrintTotals strong,
+  .ccAppShell .ccBoqPrintPaper .ccPrintSignature{
+    display:block!important;visibility:visible!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintBrand{
+    display:flex!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintBillTo,
+  .ccAppShell .ccBoqPrintPaper .ccPrintBottom{
+    display:grid!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintMeta{
+    display:grid!important
+  }
+  .ccAppShell .ccBoqPrintPaper .ccPrintTotals span,
+  .ccAppShell .ccBoqPrintPaper .ccPrintTotals strong{
+    display:flex!important
+  }
+
   .ccAppShell{
     display:block!important;position:static!important;width:100%!important;max-width:none!important;
     height:auto!important;min-height:0!important;margin:0!important;padding:0!important;
