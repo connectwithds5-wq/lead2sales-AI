@@ -194,15 +194,13 @@ export default function SalesCommandCenter(){
      const quoteNumber=existing?.quotation_no||quoteNo;
      const printSource=document.querySelector(".ccBoqPrintPaper") as HTMLElement | null;
      if(!printSource) throw new Error("BOQ print preview is not available.");
-     // Capture the exact print-preview layout on a fixed A4-sized offscreen surface.
-     // Keep the surface inside the DOM but outside the visible viewport so mobile viewport
-     // width cannot clip the 210mm A4 page.
+     // Capture the exact print-preview layout on a fixed A4-sized surface.
      const printable=printSource.cloneNode(true) as HTMLElement;
      const capturePage=document.createElement("div");
      const a4WidthPx=Math.round(210/25.4*96);
      const a4HeightPx=Math.round(297/25.4*96);
      capturePage.className="ccBoqPdfCapturePage";
-     capturePage.style.cssText="display:block;visibility:visible;position:absolute;left:-10000px;top:0;z-index:-1;width:"+a4WidthPx+"px;height:"+a4HeightPx+"px;min-height:"+a4HeightPx+"px;background:#fff;margin:0;padding:0;box-sizing:border-box;overflow:visible;";
+     capturePage.style.cssText="position:fixed;left:0;top:0;width:"+a4WidthPx+"px;height:"+a4HeightPx+"px;overflow:hidden;background:#fff;opacity:0.01;pointer-events:none;z-index:2147483647;";
      printable.classList.add("ccBoqPdfCapture");
      printable.style.setProperty("display","block","important");
      printable.style.setProperty("visibility","visible","important");
@@ -214,10 +212,6 @@ export default function SalesCommandCenter(){
      printable.style.setProperty("height","auto","important");
      capturePage.appendChild(printable);
      document.body.appendChild(capturePage);
-     capturePage.querySelectorAll("*").forEach((el)=>{
-       const node=el as HTMLElement;
-       node.style.setProperty("visibility","visible","important");
-     });
      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
      const { default: html2pdf } = await import("html2pdf.js");
      const pdfDataUri=await html2pdf().set({
@@ -237,8 +231,7 @@ export default function SalesCommandCenter(){
          scrollX:0,
          scrollY:0
        },
-       jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true},
-       pagebreak:{mode:["css","legacy"]}
+       jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true}
      }).from(capturePage).outputPdf("datauristring");
      if(!pdfDataUri || String(pdfDataUri).length<100) throw new Error("BOQ PDF renderer produced an empty PDF.");
      capturePage.remove(); useEffect, useMemo, useState } from "react";
