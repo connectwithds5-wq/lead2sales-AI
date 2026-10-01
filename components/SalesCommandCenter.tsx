@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { recommendRequirement } from "../lib/recommendations";
+import { resolveCatalogProduct } from "../lib/catalogResolver";
 
 
 type Lead = {
@@ -114,7 +115,38 @@ export default function SalesCommandCenter(){
    const {data,error:loadError}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true});
    if(loadError){setError(loadError.message);setBoqLoading(false);return}
    if(data?.length){setBoqItems(data.map((x:any)=>({...x,__persisted:true})));setBoqLoading(false);return}
-   const generated=recommendRequirement(lead.requirement||"").map((x:any)=>{const {reason,review_required,...item}=x;return {id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,...item,unit_price:0,notes:review_required?("MANUAL REVIEW REQUIRED: "+reason):reason,__persisted:false};});
+   const requirement=lead.requirement||"";
+   // First resolve an explicitly named product/model against the shared master catalogue.
+   // This prevents a known catalogue product from falling through to generic/manual review logic.
+   const {data:masterProducts,error:catalogError}=await supabase
+     .from("master_catalog_products")
+     .select("id,category,subcategory,brand,model,name,specification,unit,attributes")
+     .eq("active",true);
+   if(catalogError){setError(catalogError.message);setBoqLoading(false);return}
+   const catalogMatch=resolveCatalogProduct(requirement,masterProducts||[]);
+   if(catalogMatch){
+     const p=catalogMatch.product;
+     setBoqItems([{
+       id:crypto.randomUUID(),
+       company_id:cid,
+       lead_id:lead.id,
+       category:p.category||"Other",
+       subcategory:p.subcategory||"",
+       item_name:p.name,
+       specification:p.specification||("Manufacturer: "+(p.brand||"")+" "+(p.model||"")).trim(),
+       quantity:catalogMatch.quantity,
+       unit:p.unit||"Nos",
+       unit_price:0,
+       notes:"MASTER CATALOGUE MATCH: "+(p.brand||"")+" "+(p.model||p.name)+" · Exact product selected from Lead2Sales master catalogue.",
+       master_product_id:p.id,
+       verification:"manufacturer_catalogue_match",
+       __persisted:false
+     }]);
+     setBoqLoading(false);
+     return;
+   }
+
+   const generated=recommendRequirement(requirement).map((x:any)=>{const {reason,review_required,...item}=x;return {id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,...item,unit_price:0,notes:review_required?("MANUAL REVIEW REQUIRED: "+reason):reason,__persisted:false};});
    setBoqItems(generated); setBoqLoading(false);
  }
  async function sendToClient(){
