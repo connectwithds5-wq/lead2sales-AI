@@ -51,6 +51,10 @@ export default function SalesCommandCenter(){
  const [search,setSearch]=useState("");
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
+ const [showNewLead,setShowNewLead]=useState(false);
+ const [selectedLead,setSelectedLead]=useState<Lead|null>(null);
+ const [savingLead,setSavingLead]=useState(false);
+ const [newLead,setNewLead]=useState({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});
 
  async function load(){
    setLoading(true); setError("");
@@ -85,6 +89,21 @@ export default function SalesCommandCenter(){
  const followups=leads.filter(l=>l.next_follow_up_at && new Date(l.next_follow_up_at)<=new Date());
  const quoted=quotes.reduce((a,q)=>a+Number(q.grand_total||0),0);
  const active=leads.filter(l=>!["won","lost"].includes(l.status));
+ async function createLead(){
+   const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid||!newLead.name.trim()||!newLead.requirement.trim()){setError("Name and requirement are required.");return}
+   setSavingLead(true); setError("");
+   const payload={id:crypto.randomUUID(),company_id:cid,name:newLead.name.trim(),company_name:newLead.company_name.trim()||null,phone:newLead.phone.trim()||null,email:newLead.email.trim().toLowerCase()||null,requirement:newLead.requirement.trim(),estimated_value:Number(newLead.estimated_value||0),source:newLead.source,lead_category:newLead.lead_category,status:newLead.status,next_follow_up_at:newLead.next_follow_up_at?new Date(newLead.next_follow_up_at).toISOString():null};
+   const {data,error:insertError}=await supabase.from("leads").insert(payload).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   if(insertError)setError(insertError.message); else {setLeads([data as Lead,...leads]);setShowNewLead(false);setNewLead({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});}
+   setSavingLead(false);
+ }
+ async function updateLead(patch:Partial<Lead>){
+   if(!selectedLead)return;
+   const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",localStorage.getItem("lead2sales_company_id")||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   if(updateError){setError(updateError.message);return}
+   setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead);
+ }
 
  return <div className="ccWrap">
    <div className="ccHero">
@@ -94,7 +113,7 @@ export default function SalesCommandCenter(){
        <p>Capture leads from every channel, qualify them, quote faster and keep follow-ups visible.</p>
      </div>
      <div className="ccHeroActions">
-       <button className="ccPrimary" onClick={()=>router.push("/?newLead=1")}>＋ New Lead</button>
+       <button className="ccPrimary" onClick={()=>setShowNewLead(true)}>＋ New Lead</button>
        <button className="ccGhost" onClick={()=>setView("sources")}>⚡ Connect Sources</button>
      </div>
    </div>
@@ -141,7 +160,7 @@ export default function SalesCommandCenter(){
            <div className="ccRequirement"><b>{l.lead_category||"Other"}</b><span>{l.requirement||"Requirement not captured yet"}</span></div>
            <span className={"ccStatus "+(l.status||"new")}>{(l.status||"new").replace("_"," ")}</span>
            <strong>{money(Number(l.estimated_value||0))}</strong>
-           <div className="ccActions"><button onClick={()=>router.push("/?lead="+l.id)}>Open</button><button onClick={()=>l.phone&&window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button></div>
+           <div className="ccActions"><button onClick={()=>setSelectedLead(l)}>Open</button><button onClick={()=>l.phone&&window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button></div>
          </div>)}{!loading&&!filtered.length&&<div className="ccEmpty">No matching leads.</div>}
        </div>
      </section>
@@ -149,7 +168,7 @@ export default function SalesCommandCenter(){
      <aside className="ccPanel ccActionPanel">
        <div className="ccSectionHead compact"><div><span className="ccEyebrow">TODAY</span><h2>Next actions</h2></div></div>
        <div className="ccActionCard ccActionHot"><span>🔥</span><div><b>Hot leads</b><small>{leads.filter(l=>l.status==="hot").length} need attention</small></div><strong>→</strong></div>
-       <button className="ccActionCard ccActionFollow" onClick={()=>router.push("/?followups=1")}><span>⏰</span><div><b>Follow-ups due</b><small>{followups.length} need action</small></div><strong>→</strong></button>
+       <button className="ccActionCard ccActionFollow" onClick={()=>setSelectedLead(followups[0]||null)}><span>⏰</span><div><b>Follow-ups due</b><small>{followups.length} need action</small></div><strong>→</strong></button>
        <button className="ccActionCard ccActionQuote" onClick={()=>router.push("/?quotationHistory=1")}><span>🧾</span><div><b>Quotation queue</b><small>{quotes.filter(q=>["draft","sent"].includes(q.status)).length} open quotes</small></div><strong>→</strong></button>
        <div className="ccActionCard ccActionInbox"><span>📥</span><div><b>Unprocessed inbound</b><small>Email / API / future channels</small></div><strong>→</strong></div>
        <div className="ccMiniFlow"><b>Recommended operating rule</b><span>Every new lead must end this cycle with an owner, stage, next action and follow-up date.</span></div>
@@ -160,6 +179,8 @@ export default function SalesCommandCenter(){
    <div className="ccCategoryGrid">{CATEGORIES.map(c=>{const count=leads.filter(l=>l.lead_category===c).length;return <button key={c} className="ccCategoryCard" onClick={()=>setCategoryFilter(c)}><span>{c}</span><b>{count}</b><small>{count===1?"lead":"leads"}</small></button>})}</div>
 
    {view==="sources"&&<div className="ccModalBackdrop" onClick={()=>setView("overview")}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">SOURCE CENTER</span><h2>Connect every lead channel</h2><p>Turn each channel into a controlled Lead2Sales source.</p></div><button onClick={()=>setView("overview")}>×</button></div><div className="ccIntegrationGrid">{SOURCES.map(s=><div className="ccIntegration" key={s.key}><span className={"ccSourceIcon "+s.cls}>{s.icon}</span><div><b>{s.label}</b><small>{s.desc}</small></div><button className="ccGhost" onClick={()=>{if(s.key==="email"||s.key==="whatsapp"||s.key==="website")router.push("/?leadSources=1");else alert(s.label+" connector is planned in the source roadmap.")}}>{s.key==="email"||s.key==="whatsapp"||s.key==="website"?"Configure":"Plan connector"}</button></div>)}</div><div className="ccRoadmap"><b>Source roadmap</b><span>Phase 1: Email + Website + WhatsApp · Phase 2: Meta + Instagram · Phase 3: Google Ads + API/ERP + imports · Phase 4: Calls, AI chat and advanced routing.</span></div></div></div>}
+   {showNewLead&&<div className="ccModalBackdrop" onClick={()=>setShowNewLead(false)}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">CAPTURE · NEW LEAD</span><h2>Add enquiry</h2><p>This writes directly to the live lead pipeline.</p></div><button onClick={()=>setShowNewLead(false)}>×</button></div><div className="ccFormGrid"><input placeholder="Customer name *" value={newLead.name} onChange={e=>setNewLead({...newLead,name:e.target.value})}/><input placeholder="Company / site" value={newLead.company_name} onChange={e=>setNewLead({...newLead,company_name:e.target.value})}/><input placeholder="Phone" value={newLead.phone} onChange={e=>setNewLead({...newLead,phone:e.target.value})}/><input placeholder="Email" type="email" value={newLead.email} onChange={e=>setNewLead({...newLead,email:e.target.value})}/><select value={newLead.source} onChange={e=>setNewLead({...newLead,source:e.target.value})}>{SOURCES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select><select value={newLead.lead_category} onChange={e=>setNewLead({...newLead,lead_category:e.target.value})}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select><select value={newLead.status} onChange={e=>setNewLead({...newLead,status:e.target.value})}>{STAGES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select><input type="number" placeholder="Estimated value ₹" value={newLead.estimated_value} onChange={e=>setNewLead({...newLead,estimated_value:e.target.value})}/><input type="datetime-local" value={newLead.next_follow_up_at} onChange={e=>setNewLead({...newLead,next_follow_up_at:e.target.value})}/><textarea className="ccFullField" placeholder="Customer requirement *" value={newLead.requirement} onChange={e=>setNewLead({...newLead,requirement:e.target.value})}/></div><div className="ccModalActions"><button className="ccGhost" onClick={()=>setShowNewLead(false)}>Cancel</button><button className="ccPrimary" disabled={savingLead} onClick={createLead}>{savingLead?"Saving…":"Save Lead"}</button></div></div></div>}
+   {selectedLead&&<div className="ccModalBackdrop" onClick={()=>setSelectedLead(null)}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">LEAD WORKSPACE</span><h2>{selectedLead.name}</h2><p>{selectedLead.company_name||"Individual customer"} · {sourceLabel(selectedLead.source)}</p></div><button onClick={()=>setSelectedLead(null)}>×</button></div><div className="ccDetailGrid"><div><b>Requirement</b><p>{selectedLead.requirement||"Not captured"}</p></div><div><b>Contact</b><p>{selectedLead.phone||"—"}<br/>{selectedLead.email||"—"}</p></div><label>Stage<select value={selectedLead.status} onChange={e=>updateLead({status:e.target.value})}>{STAGES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label><label>Category<select value={selectedLead.lead_category||"Other"} onChange={e=>updateLead({lead_category:e.target.value})}>{CATEGORIES.map(x=><option key={x}>{x}</option>)}</select></label><label>Estimated value<input type="number" value={selectedLead.estimated_value||0} onChange={e=>updateLead({estimated_value:Number(e.target.value)})}/></label><label>Next follow-up<input type="datetime-local" value={selectedLead.next_follow_up_at?new Date(selectedLead.next_follow_up_at).toISOString().slice(0,16):""} onChange={e=>updateLead({next_follow_up_at:e.target.value?new Date(e.target.value).toISOString():null})}/></label></div><div className="ccModalActions"><button className="ccGhost" onClick={()=>selectedLead.phone&&window.open("https://wa.me/"+selectedLead.phone.replace(/\\D/g,""),"_blank")}>WhatsApp</button><button className="ccPrimary" onClick={()=>router.push("/?lead="+selectedLead.id)}>Open full workspace</button></div></div></div>}
    {error&&<div className="ccError">{error}</div>}
  </div>
 }
