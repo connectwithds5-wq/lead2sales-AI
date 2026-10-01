@@ -194,6 +194,247 @@ export default function SalesCommandCenter(){
      const quoteNumber=existing?.quotation_no||quoteNo;
      const printSource=document.querySelector(".ccBoqPrintPaper") as HTMLElement | null;
      if(!printSource) throw new Error("BOQ print preview is not available.");
+     // Capture the exact print-preview layout on a fixed A4-sized offscreen surface.
+     // Keep the surface inside the DOM but outside the visible viewport so mobile viewport
+     // width cannot clip the 210mm A4 page.
+     const printable=printSource.cloneNode(true) as HTMLElement;
+     const capturePage=document.createElement("div");
+     const a4WidthPx=Math.round(210/25.4*96);
+     const a4HeightPx=Math.round(297/25.4*96);
+     capturePage.className="ccBoqPdfCapturePage";
+     capturePage.style.cssText="display:block;visibility:visible;position:absolute;left:-10000px;top:0;z-index:-1;width:"+a4WidthPx+"px;height:"+a4HeightPx+"px;min-height:"+a4HeightPx+"px;background:#fff;margin:0;padding:0;box-sizing:border-box;overflow:visible;";
+     printable.classList.add("ccBoqPdfCapture");
+     printable.style.setProperty("display","block","important");
+     printable.style.setProperty("visibility","visible","important");
+     printable.style.setProperty("position","static","important");
+     printable.style.setProperty("width","188mm","important");
+     printable.style.setProperty("min-width","188mm","important");
+     printable.style.setProperty("max-width","188mm","important");
+     printable.style.setProperty("margin","0 auto","important");
+     printable.style.setProperty("height","auto","important");
+     capturePage.appendChild(printable);
+     document.body.appendChild(capturePage);
+     capturePage.querySelectorAll("*").forEach((el)=>{
+       const node=el as HTMLElement;
+       node.style.setProperty("visibility","visible","important");
+     });
+     await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+     const { default: html2pdf } = await import("html2pdf.js");
+     const pdfDataUri=await html2pdf().set({
+       margin:0,
+       filename:"Quotation-"+quoteNumber+".pdf",
+       image:{type:"jpeg",quality:0.98},
+       html2canvas:{
+         scale:2,
+         useCORS:true,
+         allowTaint:true,
+         backgroundColor:"#ffffff",
+         logging:false,
+         width:a4WidthPx,
+         height:a4HeightPx,
+         windowWidth:a4WidthPx,
+         windowHeight:a4HeightPx,
+         scrollX:0,
+         scrollY:0
+       },
+       jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true},
+       pagebreak:{mode:["css","legacy"]}
+     }).from(capturePage).outputPdf("datauristring");
+     if(!pdfDataUri || String(pdfDataUri).length<100) throw new Error("BOQ PDF renderer produced an empty PDF.");
+     capturePage.remove(); useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { supabase } from "../lib/supabase";
+import { recommendRequirement } from "../lib/recommendations";
+import { resolveCatalogProduct } from "../lib/catalogResolver";
+
+
+type Lead = {
+  id:string; name:string; company_name:string|null; phone:string|null; email:string|null;
+  requirement:string; status:string; estimated_value:number; created_at:string;
+  lead_category:string|null; next_follow_up_at?:string|null; source?:string|null;
+};
+
+const SOURCES = [
+  { key:"email", label:"Email", icon:"✉", cls:"sourceEmail", desc:"Inbound emails become leads automatically" },
+  { key:"whatsapp", label:"WhatsApp", icon:"◉", cls:"sourceWhatsApp", desc:"WhatsApp enquiries and campaigns" },
+  { key:"website", label:"Website", icon:"⌂", cls:"sourceWebsite", desc:"Public form, landing page or website widget" },
+  { key:"instagram", label:"Instagram", icon:"◎", cls:"sourceInstagram", desc:"Instagram DM / social enquiries" },
+  { key:"facebook", label:"Facebook / Meta", icon:"f", cls:"sourceFacebook", desc:"Meta lead forms and campaigns" },
+  { key:"google_ads", label:"Google Ads", icon:"G", cls:"sourceGoogle", desc:"Search and lead-form campaigns" },
+  { key:"phone", label:"Phone / Call", icon:"☎", cls:"sourcePhone", desc:"Call, missed call or sales callback" },
+  { key:"referral", label:"Referral", icon:"↗", cls:"sourceReferral", desc:"Partner, customer or employee referral" },
+  { key:"walk_in", label:"Walk-in", icon:"↘", cls:"sourceWalkin", desc:"Physical enquiry or showroom visit" },
+  { key:"manual", label:"Manual", icon:"+", cls:"sourceManual", desc:"Salesperson-created lead" },
+  { key:"api", label:"API / Import", icon:"⇄", cls:"sourceApi", desc:"CSV, ERP, webhook or future integrations" },
+];
+
+const CATEGORIES = ["CCTV","Networking","Access Control","Fire Alarm","Wi-Fi","Server & Storage","Solar","Communication","Other"];
+const STAGES = [
+  {key:"new",label:"New",cls:"stageNew"},
+  {key:"contacted",label:"Contacted",cls:"stageContacted"},
+  {key:"qualified",label:"Qualified",cls:"stageQualified"},
+  {key:"proposal",label:"Proposal",cls:"stageProposal"},
+  {key:"negotiation",label:"Negotiation",cls:"stageNegotiation"},
+  {key:"won",label:"Won",cls:"stageWon"},
+  {key:"lost",label:"Lost",cls:"stageLost"},
+];
+
+function money(n:number){return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n||0)}
+function sourceLabel(value?:string|null){return SOURCES.find(s=>s.key===value)?.label || (value ? value.replace(/_/g," ") : "Unknown")}
+function sourceKey(value?:string|null){const v=(value||"manual").toLowerCase().replace(/\s+/g,"_"); if(v==="web"||v==="web_form"||v==="website_form")return "website"; if(v==="gmail"||v==="mail")return "email"; if(v==="wa")return "whatsapp"; return SOURCES.some(s=>s.key===v)?v:"manual"}
+
+export default function SalesCommandCenter(){
+ const router=useRouter(); const pathname=usePathname();
+ const [leads,setLeads]=useState<Lead[]>([]);
+ const [quotes,setQuotes]=useState<any[]>([]);
+ const [business,setBusiness]=useState("Your Workspace");
+ const [view,setView]=useState("overview");
+ const [sourceFilter,setSourceFilter]=useState("all");
+ const [stageFilter,setStageFilter]=useState("all");
+ const [categoryFilter,setCategoryFilter]=useState("All");
+ const [search,setSearch]=useState("");
+ const [loading,setLoading]=useState(true);
+ const [error,setError]=useState("");
+ const [showNewLead,setShowNewLead]=useState(false);
+ const [selectedLead,setSelectedLead]=useState<Lead|null>(null);
+ const [savingLead,setSavingLead]=useState(false);
+ const [boqLead,setBoqLead]=useState<Lead|null>(null);
+ const [boqItems,setBoqItems]=useState<any[]>([]);
+ const [boqLoading,setBoqLoading]=useState(false);
+ const [boqSaving,setBoqSaving]=useState(false);
+ const [sendClientOpen,setSendClientOpen]=useState(false);
+ const [sendChannels,setSendChannels]=useState<("whatsapp"|"email")[]>(["whatsapp","email"]);
+ const [sendProceed,setSendProceed]=useState(false);
+ const [newLead,setNewLead]=useState({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});
+
+ async function load(){
+   setLoading(true); setError("");
+   const {data:{user}}=await supabase.auth.getUser();
+   if(!user){router.replace("/login");return}
+   const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid){router.replace("/onboarding");return}
+   if(!cid){setError("Workspace not found.");setLoading(false);return}
+   const [{data:co},{data:leadData,error:leadError},{data:quoteData}]=await Promise.all([
+     supabase.from("companies").select("name").eq("id",cid).maybeSingle(),
+     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").eq("company_id",cid).order("created_at",{ascending:false}),
+     supabase.from("quotations").select("id,status,grand_total,created_at").eq("company_id",cid).order("created_at",{ascending:false})
+   ]);
+   if(co?.name)setBusiness(co.name);
+   if(leadError)setError(leadError.message); else setLeads((leadData||[]) as Lead[]);
+   setQuotes(quoteData||[]);
+   setLoading(false);
+ }
+ useEffect(()=>{void load()},[]);
+
+ const filtered=useMemo(()=>leads.filter(l=>{
+   const src=sourceKey(l.source);
+   return (sourceFilter==="all"||src===sourceFilter) &&
+     (stageFilter==="all"||l.status===stageFilter) &&
+     (categoryFilter==="All"||l.lead_category===categoryFilter) &&
+     [l.name,l.company_name||"",l.email||"",l.phone||"",l.requirement].join(" ").toLowerCase().includes(search.toLowerCase());
+ }),[leads,sourceFilter,stageFilter,categoryFilter,search]);
+
+ const sourceCounts=useMemo(()=>Object.fromEntries(SOURCES.map(s=>[s.key,leads.filter(l=>sourceKey(l.source)===s.key).length])),[leads]);
+ const pipeline=leads.filter(l=>!["won","lost"].includes(l.status)).reduce((a,l)=>a+Number(l.estimated_value||0),0);
+ const won=leads.filter(l=>l.status==="won");
+ const followups=leads.filter(l=>l.next_follow_up_at && new Date(l.next_follow_up_at)<=new Date());
+ const quoted=quotes.reduce((a,q)=>a+Number(q.grand_total||0),0);
+ const active=leads.filter(l=>!["won","lost"].includes(l.status));
+ async function createLead(){
+   const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid||!newLead.name.trim()||!newLead.requirement.trim()){setError("Name and requirement are required.");return}
+   setSavingLead(true); setError("");
+   const payload={id:crypto.randomUUID(),company_id:cid,name:newLead.name.trim(),company_name:newLead.company_name.trim()||null,phone:newLead.phone.trim()||null,email:newLead.email.trim().toLowerCase()||null,requirement:newLead.requirement.trim(),estimated_value:Number(newLead.estimated_value||0),source:newLead.source,lead_category:newLead.lead_category,status:newLead.status,next_follow_up_at:newLead.next_follow_up_at?new Date(newLead.next_follow_up_at).toISOString():null};
+   const {data,error:insertError}=await supabase.from("leads").insert(payload).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   if(insertError)setError(insertError.message); else {setLeads([data as Lead,...leads]);setShowNewLead(false);setNewLead({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});}
+   setSavingLead(false);
+ }
+ async function openBoq(lead:Lead){
+   setSelectedLead(null); setBoqLead(lead); setBoqLoading(true); setBoqItems([]);
+   const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid){setError("Workspace not found.");setBoqLoading(false);return}
+   const {data,error:loadError}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true});
+   if(loadError){setError(loadError.message);setBoqLoading(false);return}
+   const requirement=lead.requirement||"";
+   // Resolve an explicitly named product/model against the shared master catalogue before
+   // falling back to generic engineering rules. Also repair an older saved manual-review row.
+   const {data:masterProducts,error:catalogError}=await supabase
+     .from("master_catalog_products")
+     .select("id,category,subcategory,brand,model,name,specification,unit,attributes")
+     .eq("active",true);
+   if(catalogError){setError(catalogError.message);setBoqLoading(false);return}
+   const catalogMatch=resolveCatalogProduct(requirement,masterProducts||[]);
+   const hasOnlyManualReview=Boolean(data?.length) && data!.every((x:any)=>String(x.item_name||"").toLowerCase().startsWith("manual review:"));
+   if(data?.length && !catalogMatch || (data?.length && catalogMatch && !hasOnlyManualReview)){
+     setBoqItems(data.map((x:any)=>({...x,__persisted:true})));setBoqLoading(false);return
+   }
+   if(catalogMatch){
+     const p=catalogMatch.product;
+     // Master catalogue contains technical data, while commercial pricing belongs
+     // to the company's activated product catalogue.
+     const {data:companyProduct,error:companyProductError}=await supabase
+       .from("product_catalog")
+       .select("selling_price,cost_price,unit")
+       .eq("company_id",cid)
+       .eq("master_product_id",p.id)
+       .eq("active",true)
+       .maybeSingle();
+     if(companyProductError){setError(companyProductError.message);setBoqLoading(false);return}
+     const sellingPrice=Number(companyProduct?.selling_price||0);
+     const priceNote=sellingPrice>0
+       ? "Company catalogue price loaded: "+sellingPrice
+       : "PRICE NOT CONFIGURED: Activate this product in Product Catalogue and enter Selling Price.";
+     setBoqItems([{
+       id:crypto.randomUUID(),
+       company_id:cid,
+       lead_id:lead.id,
+       category:p.category||"Other",
+       subcategory:p.subcategory||"",
+       item_name:p.name,
+       specification:p.specification||("Manufacturer: "+(p.brand||"")+" "+(p.model||"")).trim(),
+       quantity:catalogMatch.quantity,
+       unit:companyProduct?.unit||p.unit||"Nos",
+       unit_price:sellingPrice,
+       notes:"MASTER CATALOGUE MATCH: "+(p.brand||"")+" "+(p.model||p.name)+" · Exact product selected. "+priceNote,
+       master_product_id:p.id,
+       verification:"manufacturer_catalogue_match",
+       __persisted:false
+     }]);
+     setBoqLoading(false);
+     return;
+   }
+
+   const generated=recommendRequirement(requirement).map((x:any)=>{const {reason,review_required,...item}=x;return {id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,...item,unit_price:0,notes:review_required?("MANUAL REVIEW REQUIRED: "+reason):reason,__persisted:false};});
+   setBoqItems(generated); setBoqLoading(false);
+ }
+ async function sendToClient(){
+   if(!boqLead)return;
+   const missingWhatsapp=sendChannels.includes("whatsapp")&&!String(boqLead.phone||"").trim();
+   const missingEmail=sendChannels.includes("email")&&!String(boqLead.email||"").trim();
+   if((missingWhatsapp||missingEmail)&&!sendProceed)return;
+   const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid){setError("Workspace not found.");return}
+   const available=sendChannels.filter(ch=>ch==="whatsapp"?!!String(boqLead.phone||"").trim():!!String(boqLead.email||"").trim());
+   if(!available.length){setError("No available customer contact channel to send.");return}
+   try{
+     const subtotal=boqItems.reduce((a,x)=>a+Number(x.quantity||0)*Number(x.unit_price||0),0);
+     const gst=18, tax=subtotal*gst/100, total=subtotal+tax;
+     const quoteNo="L2S-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-6);
+     const {data:existing}=await supabase.from("quotations").select("id,quotation_no").eq("company_id",cid).eq("lead_id",boqLead.id).order("created_at",{ascending:false}).limit(1).maybeSingle();
+     let quoteId=existing?.id||crypto.randomUUID();
+     if(existing?.id){
+       const {error}=await supabase.from("quotations").update({subtotal,gst_percent:gst,gst_amount:tax,grand_total:total,status:"draft"}).eq("id",quoteId).eq("company_id",cid);
+       if(error)throw error;
+       await supabase.from("quotation_items").delete().eq("quotation_id",quoteId);
+     }else{
+       const {error}=await supabase.from("quotations").insert({id:quoteId,company_id:cid,lead_id:boqLead.id,quotation_no:quoteNo,subtotal,gst_percent:gst,gst_amount:tax,grand_total:total,status:"draft"});
+       if(error)throw error;
+     }
+     const itemRows=boqItems.filter(x=>String(x.item_name||"").trim()).map(x=>({quotation_id:quoteId,item_name:x.item_name,specification:x.specification||"",quantity:Number(x.quantity)||0,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0}));
+     if(itemRows.length){const {error}=await supabase.from("quotation_items").insert(itemRows);if(error)throw error}
+     const quoteNumber=existing?.quotation_no||quoteNo;
+     const printSource=document.querySelector(".ccBoqPrintPaper") as HTMLElement | null;
+     if(!printSource) throw new Error("BOQ print preview is not available.");
      // Capture the print-preview document inside a full A4 canvas so no left/right content is clipped.
      const printable=printSource.cloneNode(true) as HTMLElement;
      const capturePage=document.createElement("div");
