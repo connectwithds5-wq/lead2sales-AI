@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 type Lead = {
   id:string; name:string; company_name:string|null; phone:string|null; email:string|null;
   requirement:string; status:string; estimated_value:number; created_at:string;
-  lead_category:string|null; source?:string|null;
+  lead_category:string|null; next_follow_up_at?:string|null; source?:string|null;
 };
 
 const SOURCES = [
