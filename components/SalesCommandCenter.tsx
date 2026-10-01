@@ -63,7 +63,8 @@ export default function SalesCommandCenter(){
  const [boqSaving,setBoqSaving]=useState(false);
  const [sendClientOpen,setSendClientOpen]=useState(false);
  const [sendChannels,setSendChannels]=useState<("whatsapp"|"email")[]>(["whatsapp","email"]);
- const [sendProceed,setSendProceed]=useState(false);\n const [moduleView,setModuleView]=useState<"quotes"|"boq"|"followups"|null>(null);
+ const [sendProceed,setSendProceed]=useState(false);
+ const [moduleView,setModuleView]=useState<"quotes"|"boq"|"followups"|null>(null);
  const [newLead,setNewLead]=useState({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});
 
  async function load(){
@@ -278,7 +279,13 @@ export default function SalesCommandCenter(){
        const shareData=await shareRes.json().catch(()=>({}));
        if(!shareRes.ok)throw new Error(shareData.error||"Could not create WhatsApp quotation link.");
        shareUrl=shareData.shortUrl||shareData.url||"";
-       const msg="Dear "+boqLead.name+",\\n\\nPlease find your quotation "+quoteNumber+" from "+business+".\\n\\nQuotation value: "+money(total)+".\\n\\nPDF: "+shareUrl;
+       const msg="Dear "+boqLead.name+",\
+\
+Please find your quotation "+quoteNumber+" from "+business+".\
+\
+Quotation value: "+money(total)+".\
+\
+PDF: "+shareUrl;
        // WhatsApp's wa.me URL cannot attach a local file. On supported mobile browsers,
        // use the native share sheet so the exact generated PDF can be selected in WhatsApp
        // as an attachment. Fall back to the share link when file sharing is unavailable.
