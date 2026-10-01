@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest,NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { encryptToken, googleRedirectUri, verifyState } from "../../../../lib/gmail";
 
@@ -7,10 +7,11 @@ export async function GET(request:NextRequest){
   const code=request.nextUrl.searchParams.get("code")||"";
   const error=request.nextUrl.searchParams.get("error");
   const base=process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-  if(error) return NextResponse.redirect(base+"/?email=google_cancelled");
-  if(!state||!code) return NextResponse.redirect(base+"/?email=google_error");
+  const profilePath="/company-profile";
+  if(error) return NextResponse.redirect(base+profilePath+"?email=google_cancelled");
+  if(!state||!code) return NextResponse.redirect(base+profilePath+"?email=google_error");
   const clientId=process.env.GOOGLE_CLIENT_ID, clientSecret=process.env.GOOGLE_CLIENT_SECRET;
-  if(!clientId||!clientSecret) return NextResponse.redirect(base+"/?email=google_not_configured");
+  if(!clientId||!clientSecret) return NextResponse.redirect(base+profilePath+"?email=google_not_configured");
   try{
     const tokenRes=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:clientId,client_secret:clientSecret,redirect_uri:googleRedirectUri(),grant_type:"authorization_code"})});
     const tokens=await tokenRes.json();
@@ -29,9 +30,9 @@ export async function GET(request:NextRequest){
       provider_account_id:profile.sub||null,enabled:true,updated_at:new Date().toISOString()
     },{onConflict:"company_id,provider"});
     if(dbError) throw dbError;
-    return NextResponse.redirect(base+"/?email=google_connected");
+    return NextResponse.redirect(base+profilePath+"?email=google_connected");
   }catch(e){
     console.error("Gmail OAuth callback failed:",e);
-    return NextResponse.redirect(base+"/?email=google_error");
+    return NextResponse.redirect(base+profilePath+"?email=google_error");
   }
 }
