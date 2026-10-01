@@ -114,16 +114,19 @@ export default function SalesCommandCenter(){
    if(!cid){setError("Workspace not found.");setBoqLoading(false);return}
    const {data,error:loadError}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true});
    if(loadError){setError(loadError.message);setBoqLoading(false);return}
-   if(data?.length){setBoqItems(data.map((x:any)=>({...x,__persisted:true})));setBoqLoading(false);return}
    const requirement=lead.requirement||"";
-   // First resolve an explicitly named product/model against the shared master catalogue.
-   // This prevents a known catalogue product from falling through to generic/manual review logic.
+   // Resolve an explicitly named product/model against the shared master catalogue before
+   // falling back to generic engineering rules. Also repair an older saved manual-review row.
    const {data:masterProducts,error:catalogError}=await supabase
      .from("master_catalog_products")
      .select("id,category,subcategory,brand,model,name,specification,unit,attributes")
      .eq("active",true);
    if(catalogError){setError(catalogError.message);setBoqLoading(false);return}
    const catalogMatch=resolveCatalogProduct(requirement,masterProducts||[]);
+   const hasOnlyManualReview=Boolean(data?.length) && data!.every((x:any)=>String(x.item_name||"").toLowerCase().startsWith("manual review:"));
+   if(data?.length && !catalogMatch || (data?.length && catalogMatch && !hasOnlyManualReview)){
+     setBoqItems(data.map((x:any)=>({...x,__persisted:true})));setBoqLoading(false);return
+   }
    if(catalogMatch){
      const p=catalogMatch.product;
      setBoqItems([{
