@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { recommendRequirement } from "../lib/recommendations";
 
@@ -42,7 +42,7 @@ function sourceLabel(value?:string|null){return SOURCES.find(s=>s.key===value)?.
 function sourceKey(value?:string|null){const v=(value||"manual").toLowerCase().replace(/\s+/g,"_"); if(v==="web"||v==="web_form"||v==="website_form")return "website"; if(v==="gmail"||v==="mail")return "email"; if(v==="wa")return "whatsapp"; return SOURCES.some(s=>s.key===v)?v:"manual"}
 
 export default function SalesCommandCenter(){
- const router=useRouter();
+ const router=useRouter(); const pathname=usePathname();
  const [leads,setLeads]=useState<Lead[]>([]);
  const [quotes,setQuotes]=useState<any[]>([]);
  const [business,setBusiness]=useState("Your Workspace");
@@ -192,7 +192,25 @@ export default function SalesCommandCenter(){
    setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead);
  }
 
- return <div className="ccWrap">
+ return <div className="ccAppShell">
+   <aside className="ccSidebar">
+     <div className="ccBrand"><div className="ccBrandMark">L2S</div><div><b>Lead2Sales</b><small>AI Sales Platform</small></div></div>
+     <nav className="ccNav">
+       <button className={pathname==="/command-center"?"active":""} onClick={()=>router.push("/command-center")}><span>⌂</span>Command Center</button>
+       <button onClick={()=>router.push("/command-center")}><span>◉</span>Leads</button>
+       <button onClick={()=>router.push("/company-profile")}><span>🏢</span>Company Profile</button>
+       <button onClick={()=>router.push("/products-catalogue")}><span>▦</span>Product Catalogue</button>
+       <button onClick={()=>router.push("/command-center")}><span>🧾</span>Quotations</button>
+       <button onClick={()=>router.push("/command-center")}><span>📋</span>BOQ / Presales</button>
+       <button onClick={()=>router.push("/command-center")}><span>⏰</span>Follow-ups</button>
+       <button onClick={()=>router.push("/command-center")}><span>⚡</span>Lead Sources</button>
+     </nav>
+     <div className="ccSidebarBottom">
+       <button onClick={()=>router.push("/company-profile")}><span>⚙</span>Settings</button>
+       <div className="ccWorkspaceBadge"><small>WORKSPACE</small><b>{business}</b></div>
+     </div>
+   </aside>
+   <main className="ccMainContent"><div className="ccWrap">
    <div className="ccHero">
      <div>
        <span className="ccEyebrow">LEAD2SALES · SALES COMMAND CENTER</span>
