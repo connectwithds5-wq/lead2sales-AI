@@ -3,7 +3,6 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
 
-
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -42,8 +41,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const quoteId = String(body?.quoteId || "");
+    const pdfBase64 = String(body?.pdfBase64 || "");
+    if (!pdfBase64) return NextResponse.json({ error: "Generated quotation PDF is missing." }, { status: 400 });
+    if (pdfBase64.length > 4000000) return NextResponse.json({ error: "The generated PDF is too large for email sending." }, { status: 413 });
     const filename = String(body?.filename || "quotation.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
-    const pdfBase64 = String(body?.pdfBase64 || "").trim();
 
     if (!quoteId) {
       return NextResponse.json({ error: "Quotation is required." }, { status: 400 });
@@ -73,10 +74,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     // Use the exact PDF generated from the BOQ print-preview DOM in the browser.
-    if (!pdfBase64) {
-      return NextResponse.json({ error: "Quotation PDF is missing. Generate the BOQ PDF again and retry." }, { status: 400 });
-    }
-
     const finalPdfBase64 = pdfBase64;
     const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
