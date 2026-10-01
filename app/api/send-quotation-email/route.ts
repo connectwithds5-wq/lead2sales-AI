@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
+import { createQuotationPdf } from "../../../lib/quotationPdf";
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -62,6 +63,13 @@ export async function POST(request: NextRequest) {
     }
 
     const lead = Array.isArray(quotation.leads) ? quotation.leads[0] : quotation.leads;
+    const { data: quoteItems, error: itemsError } = await supabase
+      .from("quotation_items")
+      .select("item_name,specification,quantity,unit,unit_price")
+      .eq("quotation_id", quoteId)
+      .order("created_at", { ascending: true });
+    if (itemsError) return NextResponse.json({ error: "Could not load quotation items." }, { status: 500 });
+
     const recipient = String(lead?.email || "").trim();
     if (!recipient) {
       return NextResponse.json({ error: "Customer has no email address. Add the customer's email in the lead first." }, { status: 400 });
