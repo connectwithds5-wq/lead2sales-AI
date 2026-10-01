@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { recommendRequirement } from "../lib/recommendations";
+import html2pdf from "html2pdf.js";
 
 type Lead = {
   id:string; name:string; company_name:string|null; phone:string|null; email:string|null;
@@ -121,25 +122,54 @@ export default function SalesCommandCenter(){
    const missingWhatsapp=sendChannels.includes("whatsapp")&&!String(boqLead.phone||"").trim();
    const missingEmail=sendChannels.includes("email")&&!String(boqLead.email||"").trim();
    if((missingWhatsapp||missingEmail)&&!sendProceed)return;
-   const subtotal=boqItems.reduce((a,x)=>a+Number(x.quantity||0)*Number(x.unit_price||0),0);
-   const message=[
-     "Quotation from "+business,
-     "Customer: "+boqLead.name,
-     "Requirement: "+boqLead.requirement,
-     "BOQ items: "+boqItems.length,
-     "Quotation subtotal: "+money(subtotal),
-     "\nPlease review the quotation and let us know if you need any changes."
-   ].join("\\n");
-   const selected=sendChannels.filter(ch=>{
-     if(ch==="whatsapp")return !!String(boqLead.phone||"").trim();
-     if(ch==="email")return !!String(boqLead.email||"").trim();
-     return false;
-   });
-   if(selected.includes("whatsapp"))window.open("https://wa.me/"+String(boqLead.phone).replace(/\\D/g,"")+"?text="+encodeURIComponent(message),"_blank");
-   if(selected.includes("email"))window.location.href="mailto:"+encodeURIComponent(String(boqLead.email).trim())+"?subject="+encodeURIComponent("Quotation - "+business)+"&body="+encodeURIComponent(message);
-   if(!selected.length){setError("No available customer contact channel to send.");return}
-   setSendClientOpen(false);setSendProceed(false);
+   const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid){setError("Workspace not found.");return}
+   const available=sendChannels.filter(ch=>ch==="whatsapp"?!!String(boqLead.phone||"").trim():!!String(boqLead.email||"").trim());
+   if(!available.length){setError("No available customer contact channel to send.");return}
+   try{
+     const subtotal=boqItems.reduce((a,x)=>a+Number(x.quantity||0)*Number(x.unit_price||0),0);
+     const gst=18, tax=subtotal*gst/100, total=subtotal+tax;
+     const quoteNo="L2S-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-6);
+     const {data:existing}=await supabase.from("quotations").select("id,quotation_no").eq("company_id",cid).eq("lead_id",boqLead.id).order("created_at",{ascending:false}).limit(1).maybeSingle();
+     let quoteId=existing?.id||crypto.randomUUID();
+     if(existing?.id){
+       const {error}=await supabase.from("quotations").update({subtotal,gst_percent:gst,gst_amount:tax,grand_total:total,status:"draft"}).eq("id",quoteId).eq("company_id",cid);
+       if(error)throw error;
+       await supabase.from("quotation_items").delete().eq("quotation_id",quoteId);
+     }else{
+       const {error}=await supabase.from("quotations").insert({id:quoteId,company_id:cid,lead_id:boqLead.id,quotation_no:quoteNo,subtotal,gst_percent:gst,gst_amount:tax,grand_total:total,status:"draft"});
+       if(error)throw error;
+     }
+     const itemRows=boqItems.filter(x=>String(x.item_name||"").trim()).map(x=>({quotation_id:quoteId,item_name:x.item_name,specification:x.specification||"",quantity:Number(x.quantity)||0,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0}));
+     if(itemRows.length){const {error}=await supabase.from("quotation_items").insert(itemRows);if(error)throw error}
+     const quoteNumber=existing?.quotation_no||quoteNo;
+     const printable=document.createElement("div");
+     printable.style.cssText="width:794px;padding:38px;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;position:fixed;left:-10000px;top:0;z-index:-1";
+     printable.innerHTML='<h1 style="margin:0 0 6px;font-size:24px">'+business+'</h1><div style="font-size:13px;color:#666;margin-bottom:24px">QUOTATION · '+quoteNumber+'</div><h2 style="font-size:18px;margin:0 0 6px">Customer: '+String(boqLead.name).replace(/[<>]/g,"")+'</h2><div style="font-size:13px;margin-bottom:20px">'+String(boqLead.requirement||"").replace(/[<>]/g,"")+'</div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="border:1px solid #ccc;padding:8px;text-align:left">Item</th><th style="border:1px solid #ccc;padding:8px;text-align:left">Specification</th><th style="border:1px solid #ccc;padding:8px">Qty</th><th style="border:1px solid #ccc;padding:8px">Unit</th><th style="border:1px solid #ccc;padding:8px;text-align:right">Rate</th><th style="border:1px solid #ccc;padding:8px;text-align:right">Amount</th></tr></thead><tbody>'+boqItems.filter(x=>String(x.item_name||"").trim()).map(x=>'<tr><td style="border:1px solid #ccc;padding:7px">'+String(x.item_name).replace(/[<>]/g,"")+'</td><td style="border:1px solid #ccc;padding:7px">'+String(x.specification||"").replace(/[<>]/g,"")+'</td><td style="border:1px solid #ccc;padding:7px;text-align:center">'+Number(x.quantity||0)+'</td><td style="border:1px solid #ccc;padding:7px;text-align:center">'+String(x.unit||"Nos").replace(/[<>]/g,"")+'</td><td style="border:1px solid #ccc;padding:7px;text-align:right">₹'+Number(x.unit_price||0).toLocaleString("en-IN")+'</td><td style="border:1px solid #ccc;padding:7px;text-align:right">₹'+(Number(x.quantity||0)*Number(x.unit_price||0)).toLocaleString("en-IN")+'</td></tr>').join("")+'</tbody></table><div style="margin-top:22px;text-align:right;font-size:13px"><div>Subtotal: <b>₹'+subtotal.toLocaleString("en-IN")+'</b></div><div>GST (18%): <b>₹'+tax.toLocaleString("en-IN")+'</b></div><div style="font-size:17px;margin-top:6px">Grand Total: <b>₹'+total.toLocaleString("en-IN")+'</b></div></div><div style="margin-top:34px;font-size:11px;color:#666">Generated by Lead2Sales</div>';
+     document.body.appendChild(printable);
+     const pdfDataUri=await html2pdf().set({margin:0,filename:"Quotation-"+quoteNumber+".pdf",image:{type:"jpeg",quality:0.96},html2canvas:{scale:1.5,useCORS:true},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}}).from(printable).outputPdf("datauristring");
+     printable.remove();
+     const pdfBase64=String(pdfDataUri).split(",")[1]||"";
+     const filename="Quotation-"+quoteNumber+".pdf";
+     let shareUrl="";
+     if(available.includes("whatsapp")){
+       const shareRes=await fetch("/api/quotation-share",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await supabase.auth.getSession()).data.session?.access_token},body:JSON.stringify({quoteId,pdfBase64,filename})});
+       const shareData=await shareRes.json().catch(()=>({}));
+       if(!shareRes.ok)throw new Error(shareData.error||"Could not create WhatsApp quotation link.");
+       shareUrl=shareData.url||"";
+       const msg="Dear "+boqLead.name+",\\n\\nPlease find your quotation "+quoteNumber+" from "+business+".\\n\\nQuotation value: "+money(total)+"\\n\\nPDF: "+shareUrl;
+       window.open("https://wa.me/"+String(boqLead.phone).replace(/\\D/g,"")+"?text="+encodeURIComponent(msg),"_blank");
+     }
+     if(available.includes("email")){
+       const token=(await supabase.auth.getSession()).data.session?.access_token;
+       const emailRes=await fetch("/api/send-quotation-email",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify({quoteId,pdfBase64,filename})});
+       const emailData=await emailRes.json().catch(()=>({}));
+       if(!emailRes.ok)throw new Error(emailData.error||"Could not send quotation email.");
+     }
+     setSendClientOpen(false);setSendProceed(false);alert("Quotation "+quoteNumber+" prepared and sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+".");
+   }catch(e:any){console.error("Send quotation failed:",e);setError(e?.message||"Could not prepare/send quotation.");}
  }
+
  async function saveBoq(){
    if(!boqLead)return; const cid=localStorage.getItem("lead2sales_company_id"); if(!cid)return;
    setBoqSaving(true);
