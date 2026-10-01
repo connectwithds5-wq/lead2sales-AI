@@ -21,15 +21,8 @@ export default function CompanyProfile(){
  const [gmailLoading,setGmailLoading]=useState(false);
 
  async function loadGmailStatus(cid:string,accessToken:string){
-   const sr=await fetch("/api/gmail/status?company_id="+encodeURIComponent(cid),{
-     headers:{Authorization:"Bearer "+accessToken},
-     cache:"no-store"
-   });
-   if(sr.ok){
-     const sd=await sr.json();
-     setGmail({connected:!!sd.connected,email:sd.email||null});
-     return sd;
-   }
+   const sr=await fetch("/api/gmail/status?company_id="+encodeURIComponent(cid),{headers:{Authorization:"Bearer "+accessToken},cache:"no-store"});
+   if(sr.ok){const sd=await sr.json();setGmail({connected:!!sd.connected,email:sd.email||null});return sd;}
    return null;
  }
 
@@ -73,15 +66,20 @@ export default function CompanyProfile(){
 
  async function save(){
    const cid=localStorage.getItem("lead2sales_company_id");if(!cid)return;
+   const {data:{session}}=await supabase.auth.getSession();
+   if(!session?.access_token){setMsg("Your session has expired. Please sign in again.");return;}
    setSaving(true);setMsg("");
-   const payload={name:form.name.trim(),legal_name:form.legal_name.trim()||null,address:form.address.trim()||null,phone:form.phone.trim()||null,email:form.email.trim().toLowerCase()||null,gst_number:form.gst_number.trim().toUpperCase()||null,logo_url:form.logo_url.trim()||null};
+   const payload={company_id:cid,name:form.name.trim(),legal_name:form.legal_name.trim()||null,address:form.address.trim()||null,phone:form.phone.trim()||null,email:form.email.trim().toLowerCase()||null,gst_number:form.gst_number.trim().toUpperCase()||null,logo_url:form.logo_url.trim()||null};
    try{
-     const result=await Promise.race([
-       supabase.from("companies").update(payload).eq("id",cid),
-       new Promise<{error:Error}>((resolve)=>setTimeout(()=>resolve({error:new Error("Saving timed out. Please check your connection and try again.")}),10000))
-     ]);
-     setMsg(result.error?result.error.message:"Company profile saved successfully.");
-   }catch(e){setMsg(e instanceof Error?e.message:"Could not save company profile.");}
+     const controller=new AbortController();
+     const timer=setTimeout(()=>controller.abort(),10000);
+     const r=await fetch("/api/company-profile",{method:"PUT",headers:{Authorization:"Bearer "+session.access_token,"Content-Type":"application/json"},body:JSON.stringify(payload),signal:controller.signal,cache:"no-store"});
+     clearTimeout(timer);
+     const d=await r.json().catch(()=>({}));
+     if(!r.ok) throw new Error(d.error||"Could not save company profile.");
+     if(d.company)setForm({...empty,...d.company});
+     setMsg("Company profile saved successfully.");
+   }catch(e){setMsg(e instanceof Error?(e.name==="AbortError"?"Saving timed out. Please try again.":e.message):"Could not save company profile.");}
    finally{setSaving(false);}
  }
 
