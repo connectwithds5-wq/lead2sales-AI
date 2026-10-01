@@ -164,7 +164,8 @@ export default function Home(){
   if(!params.toString()) return;
   const leadId=params.get("lead");
   const lead=leadId?leads.find(l=>l.id===leadId):null;
-  if(lead)setDetailLead(lead);
+  if(params.get("boq")==="1" && lead){setQuotationLead(lead);setQuotation(true);}
+  else if(lead)setDetailLead(lead);
   if(params.get("newLead")==="1")setShow(true);
   if(params.get("leadSources")==="1")setLeadSources(true);
   if(params.get("quotationHistory")==="1")setQuotationHistory(true);
