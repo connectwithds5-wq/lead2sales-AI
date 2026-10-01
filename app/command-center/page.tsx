@@ -17,3 +17,5 @@ export default function CommandCenterPage(){
 // Trigger production rebuild after BOQ PDF build fix.
 
 // Vercel Git deployment trigger check 2026-10-01.
+
+// Final production build trigger after restoring stable BOQ PDF implementation.
