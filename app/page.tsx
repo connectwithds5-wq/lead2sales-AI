@@ -170,7 +170,7 @@ export default function Home(){
   if(params.get("leadSources")==="1")setLeadSources(true);
   if(params.get("quotationHistory")==="1")setQuotationHistory(true);
   if(params.get("followups")==="1")setActive("Follow-ups");
-  if(lead||params.get("newLead")==="1"||params.get("leadSources")==="1"||params.get("quotationHistory")==="1"||params.get("followups")==="1")router.replace("/");
+  if(!params.get("boq") && (lead||params.get("newLead")==="1"||params.get("leadSources")==="1"||params.get("quotationHistory")==="1"||params.get("followups")==="1"))router.replace("/");
  },[leads,router]);
  const filtered=useMemo(()=>leads.filter(l=>(categoryFilter==="All"||l.lead_category===categoryFilter)&&[l.name,l.company_name||"",l.requirement].join(" ").toLowerCase().includes(query.toLowerCase())),[leads,query,categoryFilter]);
  const pipeline=leads.reduce((s,l)=>s+Number(l.estimated_value||0),0);
