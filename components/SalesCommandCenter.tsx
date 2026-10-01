@@ -196,16 +196,45 @@ export default function SalesCommandCenter(){
      if(!printSource) throw new Error("BOQ print preview is not available.");
      const printable=printSource.cloneNode(true) as HTMLElement;
      printable.classList.add("ccBoqPdfCapture");
+     printable.style.setProperty("display","block","important");
+     printable.style.setProperty("visibility","visible","important");
+     printable.style.setProperty("position","fixed","important");
+     printable.style.setProperty("left","0","important");
+     printable.style.setProperty("top","0","important");
+     printable.style.setProperty("z-index","2147483647","important");
+     printable.style.setProperty("background","#fff","important");
+     printable.style.setProperty("width","188mm","important");
+     printable.style.setProperty("height","auto","important");
      document.body.appendChild(printable);
+     printable.querySelectorAll("*").forEach((el)=>{
+       const node=el as HTMLElement;
+       node.style.setProperty("visibility","visible","important");
+     });
      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+     // html2pdf captures the exact print-preview DOM after it has been made visibly renderable.
      const { default: html2pdf } = await import("html2pdf.js");
-     const pdfDataUri=await html2pdf().set({
+     const worker=html2pdf().set({
        margin:0,
        filename:"Quotation-"+quoteNumber+".pdf",
-       image:{type:"jpeg",quality:0.96},
-       html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",windowWidth:printable.scrollWidth,windowHeight:printable.scrollHeight,logging:false},
-       jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
-     }).from(printable).outputPdf("datauristring");
+       image:{type:"jpeg",quality:0.98},
+       html2canvas:{
+         scale:2,
+         useCORS:true,
+         allowTaint:true,
+         backgroundColor:"#ffffff",
+         logging:false,
+         width:printable.scrollWidth,
+         height:printable.scrollHeight,
+         windowWidth:Math.max(document.documentElement.clientWidth,printable.scrollWidth),
+         windowHeight:Math.max(document.documentElement.clientHeight,printable.scrollHeight)
+       },
+       jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true},
+       pagebreak:{mode:["css","legacy"]}
+     }).from(printable);
+     await worker.toCanvas();
+     const canvas=await worker.get("canvas");
+     if(!canvas || canvas.width<10 || canvas.height<10) throw new Error("BOQ PDF renderer produced an empty canvas.");
+     const pdfDataUri=await worker.toPdf().outputPdf("datauristring");
      printable.remove();
      const filename="Quotation-"+quoteNumber+".pdf";
      const pdfBase64=String(pdfDataUri).split(",")[1]||"";
