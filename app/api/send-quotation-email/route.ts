@@ -45,18 +45,10 @@ export async function POST(request: NextRequest) {
     const pdfBase64 = String(body?.pdfBase64 || "");
     const filename = String(body?.filename || "quotation.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
 
-    if (!quoteId || !pdfBase64) {
-      return NextResponse.json({ error: "Quotation and PDF are required." }, { status: 400 });
+    if (!quoteId) {
+      return NextResponse.json({ error: "Quotation is required." }, { status: 400 });
     }
 
-    // Vercel Functions have a 4.5 MB request-body limit, so reject oversized PDFs
-    // with a clear message instead of allowing a generic 413 error.
-    if (pdfBase64.length > 4_000_000) {
-      return NextResponse.json(
-        { error: "The generated PDF is too large for direct email sending. Please use Print / Save PDF or contact support." },
-        { status: 413 }
-      );
-    }
 
     const { data: quotation, error: quoteError } = await supabase
       .from("quotations")
