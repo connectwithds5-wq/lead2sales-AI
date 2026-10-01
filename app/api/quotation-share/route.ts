@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
     if(uploadError)throw uploadError;
     const {data:signed,error:signedError}=await admin.storage.from(bucket).createSignedUrl(path,7*24*60*60);
     if(signedError||!signed?.signedUrl)throw signedError||new Error("Could not create download link.");
-    return NextResponse.json({ok:true,url:signed.signedUrl,expiresIn:7*24*60*60});
+    const origin = request.nextUrl.origin;
+    const shortUrl = `${origin}/q/${quoteId}`;
+    return NextResponse.json({ok:true,url:signed.signedUrl,shortUrl,expiresIn:7*24*60*60});
   }catch(error:any){console.error("Quotation share failed:",error);return NextResponse.json({error:error?.message||"Could not create quotation share link."},{status:500});}
 }
