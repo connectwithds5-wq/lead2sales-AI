@@ -218,7 +218,8 @@
   body>div{display:block!important;width:auto!important;height:auto!important;min-height:0!important}
   body>div *{display:none!important}
 
-  /* Re-enable only the Command Center print path. */
+  /* Re-enable only the Command Center print path.
+     Do NOT force display:block on descendants: native table layout must survive. */
   .ccAppShell,
   .ccAppShell .ccMainContent,
   .ccAppShell .ccWrap,
@@ -226,11 +227,17 @@
   .ccAppShell .ccModalBackdrop:has(.ccBoqModal) .ccBoqModal,
   .ccAppShell .ccModalBackdrop:has(.ccBoqModal) .ccBoqPrintPaper,
   .ccAppShell .ccModalBackdrop:has(.ccBoqModal) .ccBoqPrintPaper *{
-    display:block!important;
     visibility:visible!important
   }
 
-  .ccAppShell .ccModalBackdrop:not(:has(.ccBoqModal)){display:none!important}
+  .ccAppShell .ccSidebar,
+  .ccAppShell .ccModalBackdrop:not(:has(.ccBoqModal)){
+    display:none!important
+  }
+
+  .ccAppShell .ccMainContent>.ccWrap>*:not(.ccModalBackdrop:has(.ccBoqModal)){
+    display:none!important
+  }
 
   .ccAppShell{
     display:block!important;position:static!important;width:100%!important;max-width:none!important;
@@ -298,8 +305,9 @@
   .ccPrintBillTo span{font-size:8.5pt!important;color:#596578!important}
 
   .ccPrintTable{
-    display:table!important;width:100%!important;border-collapse:collapse!important;
-    table-layout:fixed!important;font-size:8pt!important
+    display:table!important;width:100%!important;max-width:100%!important;min-width:0!important;
+    border-collapse:collapse!important;table-layout:fixed!important;font-size:8pt!important;
+    margin:0!important;padding:0!important
   }
   .ccPrintTable thead{display:table-header-group!important}
   .ccPrintTable tbody{display:table-row-group!important}
