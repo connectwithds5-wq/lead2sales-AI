@@ -232,11 +232,20 @@
 
   .ccAppShell .ccModalBackdrop:not(:has(.ccBoqModal)){display:none!important}
 
-  .ccAppShell,
-  .ccAppShell .ccMainContent,
+  .ccAppShell{
+    display:block!important;position:static!important;width:100%!important;max-width:none!important;
+    height:auto!important;min-height:0!important;margin:0!important;padding:0!important;
+    background:#fff!important;overflow:visible!important
+  }
+  .ccAppShell .ccMainContent{
+    display:block!important;position:static!important;width:100%!important;max-width:none!important;
+    height:auto!important;min-height:0!important;margin:0!important;padding:0!important;
+    background:#fff!important;overflow:visible!important
+  }
   .ccAppShell .ccWrap{
-    position:static!important;width:auto!important;height:0!important;min-height:0!important;
-    margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important
+    display:block!important;position:static!important;width:100%!important;max-width:none!important;
+    height:auto!important;min-height:0!important;margin:0!important;padding:0!important;
+    background:#fff!important;overflow:visible!important
   }
 
   .ccAppShell .ccModalBackdrop:has(.ccBoqModal){
@@ -254,8 +263,11 @@
   .ccBoqModal>*:not(.ccBoqPrintPaper){display:none!important}
 
   .ccBoqPrintPaper{
-    position:static!important;width:100%!important;height:auto!important;min-height:0!important;
-    margin:0!important;padding:0!important;background:#fff!important;color:#1d2635!important;
+    display:block!important;position:static!important;
+    width:190mm!important;max-width:190mm!important;min-width:190mm!important;
+    height:auto!important;min-height:0!important;
+    margin:0 auto!important;padding:0!important;
+    box-sizing:border-box!important;background:#fff!important;color:#1d2635!important;
     font-family:Arial,Helvetica,sans-serif!important
   }
 
