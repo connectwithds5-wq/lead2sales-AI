@@ -248,7 +248,26 @@ export default function SalesCommandCenter(){
        if(!shareRes.ok)throw new Error(shareData.error||"Could not create WhatsApp quotation link.");
        shareUrl=shareData.shortUrl||shareData.url||"";
        const msg="Dear "+boqLead.name+",\\n\\nPlease find your quotation "+quoteNumber+" from "+business+".\\n\\nQuotation value: "+money(total)+".\\n\\nPDF: "+shareUrl;
-       window.open("https://wa.me/"+String(boqLead.phone).replace(/\\D/g,"")+"?text="+encodeURIComponent(msg),"_blank");
+       // WhatsApp's wa.me URL cannot attach a local file. On supported mobile browsers,
+       // use the native share sheet so the exact generated PDF can be selected in WhatsApp
+       // as an attachment. Fall back to the share link when file sharing is unavailable.
+       let nativeShared=false;
+       try{
+         const raw=atob(pdfBase64);
+         const bytes=new Uint8Array(raw.length);
+         for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+         const pdfFile=new File([bytes],filename,{type:"application/pdf"});
+         const sharePayload={title:"Quotation "+quoteNumber,text:msg,files:[pdfFile]};
+         if(typeof navigator.share==="function"&&(!navigator.canShare||navigator.canShare({files:[pdfFile]}))){
+           await navigator.share(sharePayload);
+           nativeShared=true;
+         }
+       }catch(shareError){
+         console.warn("Native PDF share unavailable/cancelled; using WhatsApp link fallback.",shareError);
+       }
+       if(!nativeShared){
+         window.open("https://wa.me/"+String(boqLead.phone).replace(/\\D/g,"")+"?text="+encodeURIComponent(msg),"_blank");
+       }
      }
      if(available.includes("email")){
        const token=(await supabase.auth.getSession()).data.session?.access_token;
