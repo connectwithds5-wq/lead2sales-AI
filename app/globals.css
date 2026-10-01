@@ -332,7 +332,7 @@
 
   .ccBoqPrintPaper{
     display:block!important;position:static!important;
-    width:190mm!important;max-width:190mm!important;min-width:190mm!important;
+    width:188mm!important;max-width:188mm!important;min-width:188mm!important;
     height:auto!important;min-height:0!important;
     margin:0 auto!important;padding:0!important;
     box-sizing:border-box!important;background:#fff!important;color:#1d2635!important;
@@ -347,23 +347,26 @@
 
   .ccPrintBrand{
     display:flex!important;justify-content:space-between!important;align-items:flex-start!important;
-    gap:15mm!important;padding-top:1mm!important
+    gap:10mm!important;padding-top:1mm!important;width:100%!important;box-sizing:border-box!important;
+    overflow:visible!important
   }
   .ccPrintBrand>div:first-child{flex:1}
   .ccPrintBrand b{display:block!important;font-size:20pt!important;line-height:1.12!important;margin-bottom:2mm!important}
   .ccPrintBrand small,.ccPrintMeta span{display:block!important;font-size:8pt!important;color:#7b8492!important;margin-top:1mm!important}
-  .ccPrintMeta{text-align:right!important;display:grid!important;gap:1mm!important}
+  .ccPrintMeta{text-align:right!important;display:grid!important;gap:1mm!important;
+    min-width:0!important;max-width:75mm!important;box-sizing:border-box!important;overflow:visible!important
+  }
   .ccPrintMeta b{font-size:15pt!important}
   .ccBoqPrintPaper hr{display:block!important;border:0!important;border-top:1px solid #dfe4eb!important;margin:4mm 0 0!important}
 
   .ccPrintBillTo{
-    display:grid!important;grid-template-columns:1fr 1fr!important;gap:14mm!important;
-    margin:6mm 0 6mm!important
+    display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:10mm!important;
+    width:100%!important;box-sizing:border-box!important;margin:6mm 0 6mm!important
   }
-  .ccPrintBillTo>div{display:grid!important;gap:1.2mm!important}
+  .ccPrintBillTo>div{display:grid!important;gap:1.2mm!important;min-width:0!important;max-width:100%!important;overflow:visible!important}
   .ccPrintBillTo small{font-size:7pt!important;color:#8791a1!important;font-weight:800!important;letter-spacing:1px!important}
   .ccPrintBillTo b{font-size:11pt!important}
-  .ccPrintBillTo span{font-size:8.5pt!important;color:#596578!important}
+  .ccPrintBillTo span{font-size:8.5pt!important;color:#596578!important;overflow-wrap:anywhere!important;word-break:break-word!important}
 
   .ccPrintTable{
     display:table!important;width:100%!important;max-width:100%!important;min-width:0!important;
@@ -403,13 +406,22 @@
   .ccPrintTable td small{display:block!important;color:#7b8492!important;margin-top:1.2mm!important;line-height:1.35!important}
 
   .ccPrintBottom{
-    display:grid!important;grid-template-columns:1fr 68mm!important;gap:12mm!important;
-    margin-top:8mm!important;page-break-inside:avoid!important;break-inside:avoid!important
+    display:grid!important;grid-template-columns:minmax(0,1fr) 62mm!important;gap:8mm!important;
+    width:100%!important;box-sizing:border-box!important;margin-top:8mm!important;
+    page-break-inside:avoid!important;break-inside:avoid!important
   }
   .ccPrintBottom>div:first-child{font-size:8pt!important;line-height:1.55!important;color:#697487!important}
   .ccPrintBottom>div:first-child>b{display:block!important;color:#1d2635!important;font-size:8.5pt!important;margin-bottom:2mm!important}
-  .ccPrintTotals{display:grid!important;gap:2.5mm!important;font-size:8pt!important}
-  .ccPrintTotals span,.ccPrintTotals strong{display:flex!important;justify-content:space-between!important;gap:8mm!important}
+  .ccPrintTotals{display:grid!important;gap:2.5mm!important;font-size:8pt!important;
+    min-width:0!important;max-width:100%!important;box-sizing:border-box!important
+  }
+  .ccPrintTotals span,.ccPrintTotals strong{display:flex!important;justify-content:space-between!important;
+    align-items:baseline!important;gap:4mm!important;width:100%!important;box-sizing:border-box!important;
+    min-width:0!important
+  }
+  .ccPrintTotals span b,.ccPrintTotals strong b{display:block!important;white-space:nowrap!important;
+    margin-left:auto!important;text-align:right!important
+  }
   .ccPrintTotals strong{font-size:11pt!important;padding-top:3mm!important;border-top:2px solid #1d2635!important}
   .ccPrintSignature{text-align:right!important;margin-top:15mm!important;font-size:8pt!important;line-height:1.7!important;page-break-inside:avoid!important;break-inside:avoid!important}
   .ccPrintSignature b{font-size:8.5pt!important}
