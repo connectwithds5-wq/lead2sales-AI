@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 type Lead = {
@@ -39,11 +40,13 @@ function sourceLabel(value?:string|null){return SOURCES.find(s=>s.key===value)?.
 function sourceKey(value?:string|null){const v=(value||"manual").toLowerCase().replace(/\s+/g,"_"); if(v==="web"||v==="web_form"||v==="website_form")return "website"; if(v==="gmail"||v==="mail")return "email"; if(v==="wa")return "whatsapp"; return SOURCES.some(s=>s.key===v)?v:"manual"}
 
 export default function SalesCommandCenter(){
+ const router=useRouter();
  const [leads,setLeads]=useState<Lead[]>([]);
  const [quotes,setQuotes]=useState<any[]>([]);
  const [business,setBusiness]=useState("Your Workspace");
  const [view,setView]=useState("overview");
  const [sourceFilter,setSourceFilter]=useState("all");
+ const [stageFilter,setStageFilter]=useState("all");
  const [categoryFilter,setCategoryFilter]=useState("All");
  const [search,setSearch]=useState("");
  const [loading,setLoading]=useState(true);
@@ -51,11 +54,14 @@ export default function SalesCommandCenter(){
 
  async function load(){
    setLoading(true); setError("");
+   const {data:{user}}=await supabase.auth.getUser();
+   if(!user){router.replace("/login");return}
    const cid=localStorage.getItem("lead2sales_company_id");
+   if(!cid){router.replace("/onboarding");return}
    if(!cid){setError("Workspace not found.");setLoading(false);return}
    const [{data:co},{data:leadData,error:leadError},{data:quoteData}]=await Promise.all([
      supabase.from("companies").select("name").eq("id",cid).maybeSingle(),
-     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,source").eq("company_id",cid).order("created_at",{ascending:false}),
+     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").eq("company_id",cid).order("created_at",{ascending:false}),
      supabase.from("quotations").select("id,status,grand_total,created_at").eq("company_id",cid).order("created_at",{ascending:false})
    ]);
    if(co?.name)setBusiness(co.name);
@@ -68,12 +74,13 @@ export default function SalesCommandCenter(){
  const filtered=useMemo(()=>leads.filter(l=>{
    const src=sourceKey(l.source);
    return (sourceFilter==="all"||src===sourceFilter) &&
+     (stageFilter==="all"||l.status===stageFilter) &&
      (categoryFilter==="All"||l.lead_category===categoryFilter) &&
      [l.name,l.company_name||"",l.email||"",l.phone||"",l.requirement].join(" ").toLowerCase().includes(search.toLowerCase());
- }),[leads,sourceFilter,categoryFilter,search]);
+ }),[leads,sourceFilter,stageFilter,categoryFilter,search]);
 
  const sourceCounts=useMemo(()=>Object.fromEntries(SOURCES.map(s=>[s.key,leads.filter(l=>sourceKey(l.source)===s.key).length])),[leads]);
- const pipeline=leads.reduce((a,l)=>a+Number(l.estimated_value||0),0);
+ const pipeline=leads.filter(l=>!["won","lost"].includes(l.status)).reduce((a,l)=>a+Number(l.estimated_value||0),0);
  const won=leads.filter(l=>l.status==="won");
  const followups=leads.filter(l=>l.next_follow_up_at && new Date(l.next_follow_up_at)<=new Date());
  const quoted=quotes.reduce((a,q)=>a+Number(q.grand_total||0),0);
@@ -87,7 +94,7 @@ export default function SalesCommandCenter(){
        <p>Capture leads from every channel, qualify them, quote faster and keep follow-ups visible.</p>
      </div>
      <div className="ccHeroActions">
-       <button className="ccPrimary" onClick={()=>window.location.href="/?newLead=1"}>＋ New Lead</button>
+       <button className="ccPrimary" onClick={()=>router.push("/?newLead=1")}>＋ New Lead</button>
        <button className="ccGhost" onClick={()=>setView("sources")}>⚡ Connect Sources</button>
      </div>
    </div>
@@ -126,7 +133,7 @@ export default function SalesCommandCenter(){
          <input placeholder="Search name, company, phone..." value={search} onChange={e=>setSearch(e.target.value)}/>
          <select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)}><option>All</option>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select>
        </div></div>
-       <div className="ccStageStrip">{STAGES.map(s=><button key={s.key} className={s.cls} onClick={()=>setSearch(s.label)}><b>{leads.filter(l=>l.status===s.key).length}</b><span>{s.label}</span></button>)}</div>
+       <div className="ccStageStrip">{STAGES.map(s=><button key={s.key} className={s.cls} onClick={()=>setStageFilter(stageFilter===s.key?"all":s.key)}><b>{leads.filter(l=>l.status===s.key).length}</b><span>{s.label}</span></button>)}</div>
        <div className="ccLeadList">
          {loading?<div className="ccEmpty">Loading leads…</div>:filtered.slice(0,12).map(l=><div className="ccLeadRow" key={l.id}>
            <div className="ccAvatar">{l.name.split(" ").map(x=>x[0]).join("").slice(0,2)}</div>
@@ -134,7 +141,7 @@ export default function SalesCommandCenter(){
            <div className="ccRequirement"><b>{l.lead_category||"Other"}</b><span>{l.requirement||"Requirement not captured yet"}</span></div>
            <span className={"ccStatus "+(l.status||"new")}>{(l.status||"new").replace("_"," ")}</span>
            <strong>{money(Number(l.estimated_value||0))}</strong>
-           <div className="ccActions"><button onClick={()=>window.location.href="/?lead="+l.id}>Open</button><button onClick={()=>l.phone&&window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button></div>
+           <div className="ccActions"><button onClick={()=>router.push("/?lead="+l.id)}>Open</button><button onClick={()=>l.phone&&window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button></div>
          </div>)}{!loading&&!filtered.length&&<div className="ccEmpty">No matching leads.</div>}
        </div>
      </section>
@@ -142,8 +149,8 @@ export default function SalesCommandCenter(){
      <aside className="ccPanel ccActionPanel">
        <div className="ccSectionHead compact"><div><span className="ccEyebrow">TODAY</span><h2>Next actions</h2></div></div>
        <div className="ccActionCard ccActionHot"><span>🔥</span><div><b>Hot leads</b><small>{leads.filter(l=>l.status==="hot").length} need attention</small></div><strong>→</strong></div>
-       <div className="ccActionCard ccActionFollow"><span>⏰</span><div><b>Follow-ups due</b><small>{followups.length} need action</small></div><strong>→</strong></div>
-       <div className="ccActionCard ccActionQuote"><span>🧾</span><div><b>Quotation queue</b><small>{quotes.filter(q=>["draft","sent"].includes(q.status)).length} open quotes</small></div><strong>→</strong></div>
+       <button className="ccActionCard ccActionFollow" onClick={()=>router.push("/?followups=1")}><span>⏰</span><div><b>Follow-ups due</b><small>{followups.length} need action</small></div><strong>→</strong></button>
+       <button className="ccActionCard ccActionQuote" onClick={()=>router.push("/?quotationHistory=1")}><span>🧾</span><div><b>Quotation queue</b><small>{quotes.filter(q=>["draft","sent"].includes(q.status)).length} open quotes</small></div><strong>→</strong></button>
        <div className="ccActionCard ccActionInbox"><span>📥</span><div><b>Unprocessed inbound</b><small>Email / API / future channels</small></div><strong>→</strong></div>
        <div className="ccMiniFlow"><b>Recommended operating rule</b><span>Every new lead must end this cycle with an owner, stage, next action and follow-up date.</span></div>
      </aside>
@@ -152,7 +159,7 @@ export default function SalesCommandCenter(){
    <div className="ccSectionHead"><div><span className="ccEyebrow">BUSINESS CATEGORIES</span><h2>What customers are asking for</h2></div></div>
    <div className="ccCategoryGrid">{CATEGORIES.map(c=>{const count=leads.filter(l=>l.lead_category===c).length;return <button key={c} className="ccCategoryCard" onClick={()=>setCategoryFilter(c)}><span>{c}</span><b>{count}</b><small>{count===1?"lead":"leads"}</small></button>})}</div>
 
-   {view==="sources"&&<div className="ccModalBackdrop" onClick={()=>setView("overview")}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">SOURCE CENTER</span><h2>Connect every lead channel</h2><p>Turn each channel into a controlled Lead2Sales source.</p></div><button onClick={()=>setView("overview")}>×</button></div><div className="ccIntegrationGrid">{SOURCES.map(s=><div className="ccIntegration" key={s.key}><span className={"ccSourceIcon "+s.cls}>{s.icon}</span><div><b>{s.label}</b><small>{s.desc}</small></div><button className="ccGhost" onClick={()=>{if(s.key==="email"||s.key==="whatsapp"||s.key==="website")window.location.href="/?leadSources=1";else alert(s.label+" connector is planned in the source roadmap.")}}>{s.key==="email"||s.key==="whatsapp"||s.key==="website"?"Configure":"Plan connector"}</button></div>)}</div><div className="ccRoadmap"><b>Source roadmap</b><span>Phase 1: Email + Website + WhatsApp · Phase 2: Meta + Instagram · Phase 3: Google Ads + API/ERP + imports · Phase 4: Calls, AI chat and advanced routing.</span></div></div></div>}
+   {view==="sources"&&<div className="ccModalBackdrop" onClick={()=>setView("overview")}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">SOURCE CENTER</span><h2>Connect every lead channel</h2><p>Turn each channel into a controlled Lead2Sales source.</p></div><button onClick={()=>setView("overview")}>×</button></div><div className="ccIntegrationGrid">{SOURCES.map(s=><div className="ccIntegration" key={s.key}><span className={"ccSourceIcon "+s.cls}>{s.icon}</span><div><b>{s.label}</b><small>{s.desc}</small></div><button className="ccGhost" onClick={()=>{if(s.key==="email"||s.key==="whatsapp"||s.key==="website")router.push("/?leadSources=1");else alert(s.label+" connector is planned in the source roadmap.")}}>{s.key==="email"||s.key==="whatsapp"||s.key==="website"?"Configure":"Plan connector"}</button></div>)}</div><div className="ccRoadmap"><b>Source roadmap</b><span>Phase 1: Email + Website + WhatsApp · Phase 2: Meta + Instagram · Phase 3: Google Ads + API/ERP + imports · Phase 4: Calls, AI chat and advanced routing.</span></div></div></div>}
    {error&&<div className="ccError">{error}</div>}
  </div>
 }
