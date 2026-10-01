@@ -206,8 +206,8 @@ export default function SalesCommandCenter(){
        const shareRes=await fetch("/api/quotation-share",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await supabase.auth.getSession()).data.session?.access_token},body:JSON.stringify({quoteId,pdfBase64,filename})});
        const shareData=await shareRes.json().catch(()=>({}));
        if(!shareRes.ok)throw new Error(shareData.error||"Could not create WhatsApp quotation link.");
-       shareUrl=shareData.url||"";
-       const msg="Dear "+boqLead.name+",\\n\\nPlease find your quotation "+quoteNumber+" from "+business+".\\n\\nQuotation value: "+money(total)+"\\n\\nPDF: "+shareUrl;
+       shareUrl=shareData.shortUrl||shareData.url||"";
+       const msg="Dear "+boqLead.name+",\\n\\nPlease find your quotation "+quoteNumber+" from "+business+".\\n\\nQuotation value: "+money(total)+".\\n\\nPDF: "+shareUrl;
        window.open("https://wa.me/"+String(boqLead.phone).replace(/\\D/g,"")+"?text="+encodeURIComponent(msg),"_blank");
      }
      if(available.includes("email")){
