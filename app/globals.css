@@ -295,6 +295,12 @@
   .ccAppShell .ccBoqPrintPaper .ccPrintMeta{
     display:grid!important
   }
+
+  /* Restore text inside Terms & Conditions and authorization signature. */
+  .ccAppShell .ccBoqPrintPaper .ccPrintBottom>div:first-child p,
+  .ccAppShell .ccBoqPrintPaper .ccPrintSignature b{
+    display:block!important;visibility:visible!important
+  }
   .ccAppShell .ccBoqPrintPaper .ccPrintTotals span,
   .ccAppShell .ccBoqPrintPaper .ccPrintTotals strong{
     display:flex!important
