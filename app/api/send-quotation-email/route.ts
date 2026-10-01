@@ -19,12 +19,8 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-    if (!apiKey || !from) {
-      return NextResponse.json(
-        { error: "Email service is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL in Vercel." },
-        { status: 500 }
-      );
-    }
+    // Gmail OAuth is the primary sender when the company has connected Gmail.
+    // Resend is only a fallback, so its sender/domain must not block Gmail.
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json({ error: "Supabase configuration is missing." }, { status: 500 });
     }
@@ -125,6 +121,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ok:true,id:gd?.id||null,to:recipient,provider:"gmail"});
         } catch(e) { console.error("Gmail send failed:",e); }
       }
+    }
+
+    if (!apiKey || !from) {
+      return NextResponse.json(
+        { error: "No email sender is connected. Connect Gmail in Company Settings or configure a verified Resend sender domain." },
+        { status: 500 }
+      );
     }
 
     const resendResponse = await fetch("https://api.resend.com/emails", {
