@@ -12,7 +12,8 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "html2pdf.js": "^0.10.3"
+    "html2pdf.js": "^0.10.3",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@types/node": "latest",
