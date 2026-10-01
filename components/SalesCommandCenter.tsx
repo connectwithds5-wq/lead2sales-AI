@@ -129,6 +129,20 @@ export default function SalesCommandCenter(){
    }
    if(catalogMatch){
      const p=catalogMatch.product;
+     // Master catalogue contains technical data, while commercial pricing belongs
+     // to the company's activated product catalogue.
+     const {data:companyProduct,error:companyProductError}=await supabase
+       .from("product_catalog")
+       .select("selling_price,cost_price,unit")
+       .eq("company_id",cid)
+       .eq("master_product_id",p.id)
+       .eq("active",true)
+       .maybeSingle();
+     if(companyProductError){setError(companyProductError.message);setBoqLoading(false);return}
+     const sellingPrice=Number(companyProduct?.selling_price||0);
+     const priceNote=sellingPrice>0
+       ? "Company catalogue price loaded: "+sellingPrice
+       : "PRICE NOT CONFIGURED: Activate this product in Product Catalogue and enter Selling Price.";
      setBoqItems([{
        id:crypto.randomUUID(),
        company_id:cid,
@@ -138,9 +152,9 @@ export default function SalesCommandCenter(){
        item_name:p.name,
        specification:p.specification||("Manufacturer: "+(p.brand||"")+" "+(p.model||"")).trim(),
        quantity:catalogMatch.quantity,
-       unit:p.unit||"Nos",
-       unit_price:0,
-       notes:"MASTER CATALOGUE MATCH: "+(p.brand||"")+" "+(p.model||p.name)+" · Exact product selected from Lead2Sales master catalogue.",
+       unit:companyProduct?.unit||p.unit||"Nos",
+       unit_price:sellingPrice,
+       notes:"MASTER CATALOGUE MATCH: "+(p.brand||"")+" "+(p.model||p.name)+" · Exact product selected. "+priceNote,
        master_product_id:p.id,
        verification:"manufacturer_catalogue_match",
        __persisted:false
