@@ -194,8 +194,9 @@ export default function SalesCommandCenter(){
      const quoteNumber=existing?.quotation_no||quoteNo;
      const printSource=document.querySelector(".ccBoqPrintPaper") as HTMLElement | null;
      if(!printSource) throw new Error("BOQ print preview is not available.");
-     // Reuse the proven mobile-safe capture surface: a visible fixed clone of the
-     // exact print-preview DOM. This avoids empty canvases on Android Chrome.
+     // Mobile-safe capture: render the exact print-preview DOM with html2canvas directly,
+     // then place that canvas into an A4 jsPDF. This avoids html2pdf's mobile worker
+     // returning an empty canvas on Android Chrome.
      const printable=printSource.cloneNode(true) as HTMLElement;
      printable.classList.add("ccBoqPdfCapture");
      printable.style.setProperty("display","block","important");
@@ -213,31 +214,62 @@ export default function SalesCommandCenter(){
        node.style.setProperty("visibility","visible","important");
      });
      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-     const { default: html2pdf } = await import("html2pdf.js");
-     const worker=html2pdf().set({
-       margin:0,
-       filename:"Quotation-"+quoteNumber+".pdf",
-       image:{type:"jpeg",quality:0.98},
-       html2canvas:{
-         scale:2,
-         useCORS:true,
-         allowTaint:true,
-         backgroundColor:"#ffffff",
-         logging:false,
-         width:printable.scrollWidth,
-         height:printable.scrollHeight,
-         windowWidth:Math.max(document.documentElement.clientWidth,printable.scrollWidth),
-         windowHeight:Math.max(document.documentElement.clientHeight,printable.scrollHeight)
-       },
-       jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true},
-       pagebreak:{mode:["css","legacy"]}
-     }).from(printable);
-     await worker.toCanvas();
-     const canvas=await worker.get("canvas");
-     if(!canvas || canvas.width<10 || canvas.height<10) throw new Error("BOQ PDF renderer produced an empty canvas.");
-     const pdfDataUri=await worker.toPdf().outputPdf("datauristring");
+     const { default: html2canvas } = await import("html2canvas");
+     const { jsPDF } = await import("jspdf");
+     const canvas=await html2canvas(printable,{
+       scale:2,
+       useCORS:true,
+       allowTaint:true,
+       backgroundColor:"#ffffff",
+       logging:false,
+       imageTimeout:15000,
+       windowWidth:Math.max(document.documentElement.clientWidth,printable.scrollWidth),
+       windowHeight:Math.max(document.documentElement.clientHeight,printable.scrollHeight),
+       scrollX:0,
+       scrollY:0
+     });
+     if(!canvas || canvas.width<10 || canvas.height<10){
+       printable.remove();
+       throw new Error("BOQ PDF renderer produced an empty canvas.");
+     }
+     const pdf=new jsPDF({unit:"mm",format:"a4",orientation:"portrait",compress:true});
+     const pageWidth=210;
+     const pageHeight=297;
+     const sideMargin=11;
+     const topMargin=10;
+     const usableWidth=pageWidth-(sideMargin*2);
+     const imageWidth=usableWidth;
+     const imageHeight=(canvas.height/canvas.width)*imageWidth;
+     const usableHeight=pageHeight-topMargin-12;
+     const imageData=canvas.toDataURL("image/jpeg",0.98);
+     if(imageHeight<=usableHeight){
+       pdf.addImage(imageData,"JPEG",sideMargin,topMargin,imageWidth,imageHeight,undefined,"FAST");
+     }else{
+       let remainingPx=canvas.height;
+       let sourceY=0;
+       const pageCanvas=document.createElement("canvas");
+       const pagePxHeight=Math.max(1,Math.floor((usableHeight/imageWidth)*canvas.width));
+       pageCanvas.width=canvas.width;
+       pageCanvas.height=Math.min(pagePxHeight,canvas.height);
+       const ctx=pageCanvas.getContext("2d");
+       if(!ctx) throw new Error("Could not prepare the BOQ PDF canvas.");
+       let firstPage=true;
+       while(remainingPx>0){
+         pageCanvas.height=Math.min(pagePxHeight,remainingPx);
+         ctx.clearRect(0,0,pageCanvas.width,pageCanvas.height);
+         ctx.drawImage(canvas,0,sourceY,canvas.width,pageCanvas.height,0,0,canvas.width,pageCanvas.height);
+         const pageData=pageCanvas.toDataURL("image/jpeg",0.98);
+         if(!firstPage) pdf.addPage();
+         const h=(pageCanvas.height/canvas.width)*imageWidth;
+         pdf.addImage(pageData,"JPEG",sideMargin,topMargin,imageWidth,h,undefined,"FAST");
+         firstPage=false;
+         sourceY+=pageCanvas.height;
+         remainingPx-=pageCanvas.height;
+       }
+     }
      printable.remove();
      const filename="Quotation-"+quoteNumber+".pdf";
+     const pdfDataUri=pdf.output("datauristring");
      const pdfBase64=String(pdfDataUri).split(",")[1]||"";
      if(!pdfBase64) throw new Error("Could not generate the BOQ PDF.");
      let shareUrl="";
