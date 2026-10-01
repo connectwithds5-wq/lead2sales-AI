@@ -73,7 +73,9 @@ export async function POST(request: NextRequest) {
       .eq("id", quotation.company_id)
       .single();
 
-    // Use the exact PDF generated from the BOQ print-preview DOM in the browser.\n    const finalPdfBase64 = pdfBase64;\n    const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
+    // Use the exact PDF generated from the BOQ print-preview DOM in the browser.
+    const finalPdfBase64 = pdfBase64;
+    const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
     const companyName = company?.legal_name || company?.name || "Lead2Sales";
     const customerName = lead?.name || "Customer";
