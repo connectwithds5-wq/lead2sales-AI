@@ -432,3 +432,22 @@
   .ccPrintSignature{text-align:right!important;margin-top:15mm!important;font-size:8pt!important;line-height:1.7!important;page-break-inside:avoid!important;break-inside:avoid!important}
   .ccPrintSignature b{font-size:8.5pt!important}
 }
+
+@media print{
+  body *{visibility:hidden!important}
+  .ccModalBackdrop,.ccModalBackdrop *{visibility:visible!important}
+  .ccModalBackdrop{position:static!important;display:block!important;width:100%!important;height:auto!important;min-height:0!important;background:#fff!important;overflow:visible!important}
+  .ccModal{position:static!important;display:block!important;width:210mm!important;max-width:210mm!important;min-width:210mm!important;height:auto!important;max-height:none!important;margin:0!important;padding:12mm!important;box-sizing:border-box!important;background:#fff!important;color:#111!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important}
+  .ccModalHead{display:flex!important;width:100%!important;align-items:flex-start!important;justify-content:space-between!important;margin-bottom:10mm!important}
+  .ccModalHead>button{display:none!important}
+  .ccBoqTable{display:block!important;width:100%!important;overflow:visible!important}
+  .ccBoqRow{display:grid!important;grid-template-columns:1.25fr 2fr .55fr .65fr .9fr .6fr!important;width:100%!important;box-sizing:border-box!important}
+  .ccBoqRow input{border:0!important;background:transparent!important;color:#111!important;padding:5px!important;font-size:9pt!important;box-sizing:border-box!important;width:100%!important}
+  .ccBoqHeader{font-weight:700!important;border-bottom:2px solid #111!important}
+  .ccBoqTotals{display:flex!important;justify-content:flex-end!important;margin-top:8mm!important;font-size:11pt!important}
+  .ccRowDelete,.ccModalActions{display:none!important}
+  .ccModal .ccEyebrow{color:#555!important}
+  .ccModal h2,.ccModal p,.ccModal span,.ccModal b{color:#111!important}
+  .ccModalBackdrop .ccSendModal{display:none!important}
+  @page{size:A4 portrait;margin:0}
+}
