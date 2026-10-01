@@ -79,7 +79,6 @@ export async function POST(request: NextRequest) {
     const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
     const companyName = company?.legal_name || company?.name || "Lead2Sales";
-    const companyName = company?.legal_name || company?.name || "Lead2Sales";
     const customerName = lead?.name || "Customer";
     const total = new Intl.NumberFormat("en-IN", {
       style: "currency",
