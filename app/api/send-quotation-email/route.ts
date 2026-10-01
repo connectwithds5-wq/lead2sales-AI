@@ -99,11 +99,14 @@ export async function POST(request: NextRequest) {
     `;
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    let gmailConnected = false;
     if (serviceKey) {
       const admin = createClient(supabaseUrl, serviceKey);
       const { data: gmail } = await admin.from("email_connections").select("id,email_address,access_token_encrypted,refresh_token_encrypted,expires_at,enabled").eq("company_id",quotation.company_id).eq("provider","google").eq("enabled",true).maybeSingle();
-      if (gmail?.refresh_token_encrypted || gmail?.access_token_encrypted) {
+      if (gmail) {
+        gmailConnected = true;
         try {
+          if (!gmail.refresh_token_encrypted && !gmail.access_token_encrypted) throw new Error("Gmail connection is incomplete. Please reconnect Gmail in Company Profile.");
           let accessToken = gmail.access_token_encrypted ? decryptToken(gmail.access_token_encrypted) : "";
           if (!gmail.expires_at || new Date(gmail.expires_at).getTime() < Date.now()+60000) {
             if (!gmail.refresh_token_encrypted) throw new Error("Gmail connection needs to be reconnected.");
@@ -119,8 +122,15 @@ export async function POST(request: NextRequest) {
           const gd=await gr.json().catch(()=>({}));
           if(!gr.ok) throw new Error(gd?.error?.message||"Gmail rejected the message.");
           return NextResponse.json({ok:true,id:gd?.id||null,to:recipient,provider:"gmail"});
-        } catch(e) { console.error("Gmail send failed:",e); }
+        } catch(e) {
+          console.error("Gmail send failed:",e);
+          return NextResponse.json({ error: e instanceof Error ? e.message : "Gmail could not send the quotation. Please reconnect Gmail." }, { status: 502 });
+        }
       }
+    }
+
+    if (gmailConnected) {
+      return NextResponse.json({ error: "Gmail is connected but could not send the quotation. Please reconnect Gmail in Company Profile." }, { status: 502 });
     }
 
     if (!apiKey || !from) {
