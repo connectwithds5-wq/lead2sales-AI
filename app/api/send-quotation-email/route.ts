@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import PDFDocument from "pdfkit";
 import { createClient } from "@supabase/supabase-js";
 import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     const { data: quotation, error: quoteError } = await supabase
       .from("quotations")
-      .select("id, quotation_no, grand_total, company_id, lead_id, leads(name,email,company_name)")
+      .select("id, quotation_no, grand_total, subtotal, gst_percent, gst_amount, company_id, lead_id, leads(name,email,company_name)")
       .eq("id", quoteId)
       .single();
 
@@ -78,6 +79,95 @@ export async function POST(request: NextRequest) {
       .select("name,legal_name,email,phone,address,gst_number")
       .eq("id", quotation.company_id)
       .single();
+
+    const { data: quotationItems, error: itemError } = await supabase
+      .from("quotation_items")
+      .select("item_name,specification,quantity,unit,unit_price")
+      .eq("quotation_id", quotation.id)
+      .order("created_at", { ascending: true });
+
+    if (itemError) {
+      return NextResponse.json({ error: "Could not load quotation items." }, { status: 500 });
+    }
+
+    // Generate the attachment on the server. This avoids browser canvas/print
+    // rendering entirely, which can produce a blank PDF in some browsers.
+    const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ size: "A4", margin: 42 });
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      const companyName = company?.legal_name || company?.name || "Lead2Sales";
+      const customerName = lead?.name || "Customer";
+      const money = (value: number) => "INR " + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value || 0);
+
+      doc.fontSize(20).font("Helvetica-Bold").text(companyName);
+      doc.fontSize(9).font("Helvetica").fillColor("#666").text("QUOTATION");
+      doc.moveDown(0.7);
+      doc.fillColor("#111").fontSize(12).font("Helvetica-Bold").text("Quotation No: " + quotation.quotation_no);
+      doc.fontSize(10).font("Helvetica").text("Date: " + new Date().toLocaleDateString("en-IN"));
+      doc.moveDown(0.8);
+
+      doc.fontSize(11).font("Helvetica-Bold").text("Customer");
+      doc.fontSize(10).font("Helvetica").text(customerName);
+      if (lead?.company_name) doc.text(String(lead.company_name));
+      if (recipient) doc.text(recipient);
+      if (company?.phone) doc.text(String(company.phone));
+      if (company?.address) doc.text(String(company.address));
+      doc.moveDown(1);
+
+      const tableX = 42;
+      const col = [250, 130, 45, 65, 75];
+      const headers = ["Item / Specification", "Specification", "Qty", "Unit", "Amount"];
+      let y = doc.y;
+      const rowH = 30;
+
+      const drawHeader = () => {
+        doc.save().fillColor("#111").rect(tableX, y, col.reduce((a,b)=>a+b,0), rowH).fill().restore();
+        let x = tableX;
+        headers.forEach((h,i) => {
+          doc.fillColor("#fff").font("Helvetica-Bold").fontSize(8).text(h, x+5, y+10, { width: col[i]-10 });
+          x += col[i];
+        });
+        y += rowH;
+      };
+      const drawRow = (item: any) => {
+        if (y > 735) { doc.addPage(); y = 42; drawHeader(); }
+        const amount = Number(item.quantity || 0) * Number(item.unit_price || 0);
+        const text = String(item.item_name || "") + (item.specification ? "\n" + String(item.specification) : "");
+        let x = tableX;
+        [text, String(item.specification || ""), String(item.quantity || 0), String(item.unit || "Nos"), money(amount)].forEach((v,i) => {
+          doc.fillColor("#111").font(i === 0 ? "Helvetica-Bold" : "Helvetica").fontSize(8)
+            .text(v, x+5, y+7, { width: col[i]-10, height: rowH-8, ellipsis: true });
+          x += col[i];
+        });
+        doc.strokeColor("#ccc").moveTo(tableX, y+rowH).lineTo(tableX+col.reduce((a,b)=>a+b,0), y+rowH).stroke();
+        y += rowH;
+      };
+
+      drawHeader();
+      (quotationItems || []).forEach(drawRow);
+
+      y += 15;
+      const subtotal = Number(quotation.subtotal || 0);
+      const gstAmount = Number(quotation.gst_amount || 0);
+      const total = Number(quotation.grand_total || 0);
+      doc.font("Helvetica").fontSize(10).fillColor("#111");
+      doc.text("Subtotal: " + money(subtotal), 390, y, { width: 160, align: "right" });
+      y += 17;
+      doc.text("GST (" + Number(quotation.gst_percent || 0) + "%): " + money(gstAmount), 390, y, { width: 160, align: "right" });
+      y += 22;
+      doc.font("Helvetica-Bold").fontSize(13).text("Grand Total: " + money(total), 340, y, { width: 210, align: "right" });
+      y += 45;
+      doc.font("Helvetica").fontSize(8).fillColor("#666").text("Generated by Lead2Sales", 42, y);
+      doc.end();
+    });
+
+    const generatedPdfBase64 = pdfBuffer.toString("base64");
+    const finalPdfBase64 = generatedPdfBase64;
+    const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
     const companyName = company?.legal_name || company?.name || "Lead2Sales";
     const customerName = lead?.name || "Customer";
@@ -117,7 +207,7 @@ export async function POST(request: NextRequest) {
             await admin.from("email_connections").update({access_token_encrypted:encryptToken(accessToken),expires_at:new Date(Date.now()+Number(rt.expires_in||3600)*1000).toISOString(),updated_at:new Date().toISOString()}).eq("id",gmail.id);
           }
           const boundary="l2s_"+crypto.randomUUID().replace(/-/g,"");
-          const mime=[`From: ${mimeHeader(companyName)} <${gmail.email_address}>`,`To: ${recipient}`,`Subject: ${mimeHeader(`Quotation ${quotation.quotation_no} — ${companyName}`)}`,"MIME-Version: 1.0",`Content-Type: multipart/mixed; boundary="${boundary}"`,"",`--${boundary}`,"Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: 8bit","",html,"",`--${boundary}`,"Content-Type: application/pdf; name="+filename,"Content-Disposition: attachment; filename="+filename,"Content-Transfer-Encoding: base64","",pdfBase64.match(/.{1,76}/g)?.join("\r\n")||pdfBase64,"",`--${boundary}--`].join("\r\n");
+          const mime=[`From: ${mimeHeader(companyName)} <${gmail.email_address}>`,`To: ${recipient}`,`Subject: ${mimeHeader(`Quotation ${quotation.quotation_no} — ${companyName}`)}`,"MIME-Version: 1.0",`Content-Type: multipart/mixed; boundary="${boundary}"`,"",`--${boundary}`,"Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: 8bit","",html,"",`--${boundary}`,"Content-Type: application/pdf; name="+finalFilename,"Content-Disposition: attachment; finalFilename="+finalFilename,"Content-Transfer-Encoding: base64","",finalPdfBase64.match(/.{1,76}/g)?.join("\r\n")||finalPdfBase64,"",`--${boundary}--`].join("\r\n");
           const gr=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({raw:base64Url(mime)})});
           const gd=await gr.json().catch(()=>({}));
           if(!gr.ok) throw new Error(gd?.error?.message||"Gmail rejected the message.");
@@ -154,8 +244,8 @@ export async function POST(request: NextRequest) {
         html,
         attachments: [
           {
-            content: pdfBase64,
-            filename,
+            content: finalPdfBase64,
+            finalFilename,
             content_type: "application/pdf",
           },
         ],
