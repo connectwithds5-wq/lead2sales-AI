@@ -81,9 +81,19 @@ export async function POST(request: NextRequest) {
       .eq("id", quotation.company_id)
       .single();
 
-    // The browser creates the final quotation PDF. The server only sends the provided PDF bytes.
-    // This avoids server-side PDF renderer/font dependencies and preserves the BOQ layout.
-    const finalPdfBase64 = pdfBase64;
+    // Generate the attachment from saved quotation data on the server.
+    // Do not trust the browser-generated PDF; it was producing blank attachments.
+    const finalPdfBase64 = await createQuotationPdf({
+      companyName: company?.legal_name || company?.name || "Lead2Sales",
+      quotationNo: quotation.quotation_no,
+      customerName: lead?.name || "Customer",
+      requirement: lead?.requirement || "",
+      items: quoteItems || [],
+      subtotal: Number(quotation.subtotal || 0),
+      gstPercent: Number(quotation.gst_percent || 0),
+      gstAmount: Number(quotation.gst_amount || 0),
+      grandTotal: Number(quotation.grand_total || 0),
+    });
     const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
     const companyName = company?.legal_name || company?.name || "Lead2Sales";
