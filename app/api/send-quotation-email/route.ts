@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
             await admin.from("email_connections").update({access_token_encrypted:encryptToken(accessToken),expires_at:new Date(Date.now()+Number(rt.expires_in||3600)*1000).toISOString(),updated_at:new Date().toISOString()}).eq("id",gmail.id);
           }
           const boundary="l2s_"+crypto.randomUUID().replace(/-/g,"");
-          const mime=[`From: ${mimeHeader(companyName)} <${gmail.email_address}>`,`To: ${recipient}`,`Subject: ${mimeHeader(`Quotation ${quotation.quotation_no} — ${companyName}`)}`,"MIME-Version: 1.0",`Content-Type: multipart/mixed; boundary="${boundary}"`,"",`--${boundary}`,"Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: 8bit","",html,"",`--${boundary}`,"Content-Type: application/pdf; name="+finalFilename,"Content-Disposition: attachment; finalFilename="+finalFilename,"Content-Transfer-Encoding: base64","",finalPdfBase64.match(/.{1,76}/g)?.join("\r\n")||finalPdfBase64,"",`--${boundary}--`].join("\r\n");
+          const mime=[`From: ${mimeHeader(companyName)} <${gmail.email_address}>`,`To: ${recipient}`,`Subject: ${mimeHeader(`Quotation ${quotation.quotation_no} — ${companyName}`)}`,"MIME-Version: 1.0",`Content-Type: multipart/mixed; boundary="${boundary}"`,"",`--${boundary}`,"Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: 8bit","",html,"",`--${boundary}`,"Content-Type: application/pdf; name="+finalFilename,"Content-Disposition: attachment; filename="+finalFilename,"Content-Transfer-Encoding: base64","",finalPdfBase64.match(/.{1,76}/g)?.join("\r\n")||finalPdfBase64,"",`--${boundary}--`].join("\r\n");
           const gr=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({raw:base64Url(mime)})});
           const gd=await gr.json().catch(()=>({}));
           if(!gr.ok) throw new Error(gd?.error?.message||"Gmail rejected the message.");
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
         attachments: [
           {
             content: finalPdfBase64,
-            finalFilename,
+            filename: finalFilename,
             content_type: "application/pdf",
           },
         ],
