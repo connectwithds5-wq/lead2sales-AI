@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import PDFDocument from "pdfkit";
 import { createClient } from "@supabase/supabase-js";
 import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
 
@@ -43,6 +42,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const quoteId = String(body?.quoteId || "");
     const pdfBase64 = String(body?.pdfBase64 || "");
+    if (!pdfBase64) return NextResponse.json({ error: "Generated quotation PDF is missing." }, { status: 400 });
+    if (pdfBase64.length > 4000000) return NextResponse.json({ error: "The generated PDF is too large for email sending." }, { status: 413 });
     const filename = String(body?.filename || "quotation.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
 
     if (!quoteId) {
@@ -72,26 +73,12 @@ export async function POST(request: NextRequest) {
       .eq("id", quotation.company_id)
       .single();
 
-    const { data: quotationItems, error: itemError } = await supabase
-      .from("quotation_items")
-      .select("item_name,specification,quantity,unit,unit_price")
-      .eq("quotation_id", quotation.id)
-      .order("created_at", { ascending: true });
+    // The browser creates the final quotation PDF. The server only sends the provided PDF bytes.
+    // This avoids server-side PDF renderer/font dependencies and preserves the BOQ layout.
+    const finalPdfBase64 = pdfBase64;
+    const finalFilename = filename || ("Quotation-" + quotation.quotation_no + ".pdf");
 
-    if (itemError) {
-      return NextResponse.json({ error: "Could not load quotation items." }, { status: 500 });
-    }
-
-    // Generate the attachment on the server. This avoids browser canvas/print
-    // rendering entirely, which can produce a blank PDF in some browsers.
-    const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-      const doc = new PDFDocument({ size: "A4", margin: 42 });
-      const chunks: Buffer[] = [];
-      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
-
-      const companyName = company?.legal_name || company?.name || "Lead2Sales";
+    const companyName = company?.legal_name || company?.name || "Lead2Sales";
       const customerName = lead?.name || "Customer";
       const money = (value: number) => "INR " + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value || 0);
 
