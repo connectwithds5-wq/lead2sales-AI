@@ -17,7 +17,7 @@ export default function Login() {
   const [message,setMessage]=useState("");
   const [loading,setLoading]=useState(false);
 
-  useEffect(()=>{supabase.auth.getSession().then(async({data})=>{if(data.session){try{const restored=await restoreWorkspace(data.session.user.id);router.replace(restored?"/":"/onboarding");}catch{router.replace("/onboarding");}}});},[router]);
+  useEffect(()=>{supabase.auth.getSession().then(async({data})=>{if(data.session){try{const restored=await restoreWorkspace(data.session.user.id);router.replace(restored?"/command-center":"/onboarding");}catch{router.replace("/onboarding");}}});},[router]);
 
   async function submit(e:React.FormEvent){
     e.preventDefault(); setLoading(true); setMessage("");
