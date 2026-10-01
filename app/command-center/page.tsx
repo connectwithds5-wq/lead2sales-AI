@@ -7,3 +7,5 @@ export default function CommandCenterPage(){
 // Production sync marker.
 
 // Sync BOQ catalogue resolver update.
+
+// Sync company catalogue pricing into BOQ.
