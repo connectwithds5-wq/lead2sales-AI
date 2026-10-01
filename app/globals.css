@@ -202,55 +202,78 @@
 .profileField{font-size:12px;font-weight:700;color:#344054}.profileField input,.profileField textarea{display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;box-sizing:border-box;font:inherit;font-weight:400}.profileField textarea{min-height:86px;resize:vertical}.profileWide{grid-column:span 2}.companyLogoPreview{margin-top:14px;max-width:180px;max-height:80px;object-fit:contain;border:1px solid #eaecf0;border-radius:10px;padding:8px}.ccSuccess{position:fixed;right:20px;bottom:20px;z-index:100;background:#ecfdf3;color:#027a48;border:1px solid #abefc6;padding:12px 16px;border-radius:10px;box-shadow:0 8px 25px rgba(16,24,40,.12)}
 @media(max-width:600px){.profileWide{grid-column:auto}}
 
-/* Command Center BOQ print document — stable multi-page A4 layout */
+/* Command Center BOQ print document — isolated print tree */
 .ccBoqPrintPaper{display:none}
 
 @media print{
   @page{size:A4 portrait;margin:10mm 11mm 12mm}
 
   html,body{
-    margin:0!important;padding:0!important;background:#fff!important;
-    overflow:visible!important
+    margin:0!important;padding:0!important;width:auto!important;min-width:0!important;
+    height:auto!important;min-height:0!important;background:#fff!important;overflow:visible!important
   }
 
+  /* Remove every hidden application's physical layout from print pagination. */
   body *{visibility:hidden!important}
-  .ccBoqModal,.ccBoqModal>.ccBoqPrintPaper,.ccBoqPrintPaper,.ccBoqPrintPaper *{visibility:visible!important}
+  body>div{display:block!important;width:auto!important;height:auto!important;min-height:0!important}
+  body>div *{display:none!important}
 
-  .ccModalBackdrop{
-    position:static!important;display:block!important;width:auto!important;height:auto!important;
-    min-height:0!important;margin:0!important;padding:0!important;background:#fff!important;
-    overflow:visible!important
+  /* Re-enable only the Command Center print path. */
+  .ccAppShell,
+  .ccAppShell>.ccMain,
+  .ccAppShell .ccModalBackdrop:has(.ccBoqModal),
+  .ccAppShell .ccModalBackdrop:has(.ccBoqModal) .ccBoqModal,
+  .ccAppShell .ccModalBackdrop:has(.ccBoqModal) .ccBoqPrintPaper,
+  .ccAppShell .ccModalBackdrop:has(.ccBoqModal) .ccBoqPrintPaper *{
+    display:block!important;
+    visibility:visible!important
   }
+
+  .ccAppShell .ccModalBackdrop:not(:has(.ccBoqModal)){display:none!important}
+
+  .ccAppShell,
+  .ccAppShell>.ccMain{
+    position:static!important;width:auto!important;height:auto!important;min-height:0!important;
+    margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important
+  }
+
+  .ccAppShell .ccModalBackdrop:has(.ccBoqModal){
+    position:static!important;width:auto!important;height:auto!important;min-height:0!important;
+    margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important
+  }
+
   .ccBoqModal{
-    position:static!important;display:block!important;width:auto!important;max-width:none!important;
-    min-width:0!important;height:auto!important;max-height:none!important;min-height:0!important;
+    position:static!important;width:auto!important;max-width:none!important;min-width:0!important;
+    height:auto!important;max-height:none!important;min-height:0!important;
     margin:0!important;padding:0!important;background:#fff!important;border:0!important;
     border-radius:0!important;box-shadow:none!important;overflow:visible!important
   }
+
   .ccBoqModal>*:not(.ccBoqPrintPaper){display:none!important}
+
   .ccBoqPrintPaper{
-    display:block!important;position:static!important;width:100%!important;height:auto!important;
-    min-height:0!important;margin:0!important;padding:0!important;
-    background:#fff!important;color:#1d2635!important;
+    position:static!important;width:100%!important;height:auto!important;min-height:0!important;
+    margin:0!important;padding:0!important;background:#fff!important;color:#1d2635!important;
     font-family:Arial,Helvetica,sans-serif!important
   }
 
-  /* Full customer/header block appears once on page 1. */
   .ccPrintFirstHeader{
     display:block!important;
     page-break-after:avoid!important;
     break-after:avoid-page!important
   }
+
   .ccPrintBrand{
     display:flex!important;justify-content:space-between!important;align-items:flex-start!important;
     gap:15mm!important;padding-top:1mm!important
   }
   .ccPrintBrand>div:first-child{flex:1}
-  .ccPrintBrand b{display:block;font-size:20pt!important;line-height:1.12!important;margin-bottom:2mm!important}
-  .ccPrintBrand small,.ccPrintMeta span{display:block;font-size:8pt!important;color:#7b8492!important;margin-top:1mm!important}
+  .ccPrintBrand b{display:block!important;font-size:20pt!important;line-height:1.12!important;margin-bottom:2mm!important}
+  .ccPrintBrand small,.ccPrintMeta span{display:block!important;font-size:8pt!important;color:#7b8492!important;margin-top:1mm!important}
   .ccPrintMeta{text-align:right!important;display:grid!important;gap:1mm!important}
   .ccPrintMeta b{font-size:15pt!important}
-  .ccBoqPrintPaper hr{border:0!important;border-top:1px solid #dfe4eb!important;margin:4mm 0 0!important}
+  .ccBoqPrintPaper hr{display:block!important;border:0!important;border-top:1px solid #dfe4eb!important;margin:4mm 0 0!important}
+
   .ccPrintBillTo{
     display:grid!important;grid-template-columns:1fr 1fr!important;gap:14mm!important;
     margin:6mm 0 6mm!important
@@ -260,14 +283,14 @@
   .ccPrintBillTo b{font-size:11pt!important}
   .ccPrintBillTo span{font-size:8.5pt!important;color:#596578!important}
 
-  /* Only this compact row is repeated by the browser on page 2+. */
   .ccPrintTable{
-    width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;
-    font-size:8pt!important
+    display:table!important;width:100%!important;border-collapse:collapse!important;
+    table-layout:fixed!important;font-size:8pt!important
   }
   .ccPrintTable thead{display:table-header-group!important}
   .ccPrintTable tbody{display:table-row-group!important}
-  .ccPrintTable tr{page-break-inside:avoid!important;break-inside:avoid!important}
+  .ccPrintTable tr{display:table-row!important;page-break-inside:avoid!important;break-inside:avoid!important}
+  .ccPrintTable th,.ccPrintTable td{display:table-cell!important}
 
   .ccPrintRepeatHeader>th{
     padding:1.5mm 0 2.5mm!important;border:0!important;background:#fff!important
@@ -279,8 +302,9 @@
   }
   .ccPrintCompactHeader b{font-size:9pt!important;color:#1d2635!important}
   .ccPrintCompactHeader span{font-size:7.5pt!important}
+
   .ccPrintColumnHeader th{
-    background:#f5f7f9!important;text-align:left!important;padding:2.5mm 2.5mm!important;
+    background:#f5f7f9!important;text-align:left!important;padding:2.5mm!important;
     font-size:7.5pt!important;border-bottom:1px solid #dfe4eb!important
   }
   .ccPrintTable td{
@@ -292,15 +316,15 @@
   .ccPrintTable th:nth-child(3),.ccPrintTable td:nth-child(3){width:14%!important}
   .ccPrintTable th:nth-child(4),.ccPrintTable td:nth-child(4){width:16%!important;text-align:right!important}
   .ccPrintTable th:nth-child(5),.ccPrintTable td:nth-child(5){width:16%!important;text-align:right!important}
-  .ccPrintTable td b{display:block;font-size:8.5pt!important}
-  .ccPrintTable td small{display:block;color:#7b8492!important;margin-top:1.2mm!important;line-height:1.35!important}
+  .ccPrintTable td b{display:block!important;font-size:8.5pt!important}
+  .ccPrintTable td small{display:block!important;color:#7b8492!important;margin-top:1.2mm!important;line-height:1.35!important}
 
   .ccPrintBottom{
     display:grid!important;grid-template-columns:1fr 68mm!important;gap:12mm!important;
     margin-top:8mm!important;page-break-inside:avoid!important;break-inside:avoid!important
   }
   .ccPrintBottom>div:first-child{font-size:8pt!important;line-height:1.55!important;color:#697487!important}
-  .ccPrintBottom>div:first-child>b{display:block;color:#1d2635!important;font-size:8.5pt!important;margin-bottom:2mm!important}
+  .ccPrintBottom>div:first-child>b{display:block!important;color:#1d2635!important;font-size:8.5pt!important;margin-bottom:2mm!important}
   .ccPrintTotals{display:grid!important;gap:2.5mm!important;font-size:8pt!important}
   .ccPrintTotals span,.ccPrintTotals strong{display:flex!important;justify-content:space-between!important;gap:8mm!important}
   .ccPrintTotals strong{font-size:11pt!important;padding-top:3mm!important;border-top:2px solid #1d2635!important}
