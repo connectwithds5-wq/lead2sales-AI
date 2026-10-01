@@ -202,234 +202,91 @@
 .profileField{font-size:12px;font-weight:700;color:#344054}.profileField input,.profileField textarea{display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;box-sizing:border-box;font:inherit;font-weight:400}.profileField textarea{min-height:86px;resize:vertical}.profileWide{grid-column:span 2}.companyLogoPreview{margin-top:14px;max-width:180px;max-height:80px;object-fit:contain;border:1px solid #eaecf0;border-radius:10px;padding:8px}.ccSuccess{position:fixed;right:20px;bottom:20px;z-index:100;background:#ecfdf3;color:#027a48;border:1px solid #abefc6;padding:12px 16px;border-radius:10px;box-shadow:0 8px 25px rgba(16,24,40,.12)}
 @media(max-width:600px){.profileWide{grid-column:auto}}
 
-/* Command Center BOQ print preview - A4 document */
+/* Command Center BOQ print document — isolated A4 quotation layout */
+.ccBoqPrintPaper{display:none}
+
 @media print{
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:10mm 11mm 12mm}
+
   html,body{
-    width:210mm!important;
-    min-width:210mm!important;
+    width:auto!important;
+    min-width:0!important;
     margin:0!important;
     padding:0!important;
     background:#fff!important;
     overflow:visible!important
   }
+
+  /* Print ONLY the dedicated quotation document. The editable BOQ editor
+     must not participate in layout, so it cannot create duplicate/blank pages. */
   body *{visibility:hidden!important}
-  .ccModalBackdrop,
-  .ccModalBackdrop *{visibility:visible!important}
+  .ccBoqModal,
+  .ccBoqModal>.ccBoqPrintPaper,
+  .ccBoqPrintPaper,
+  .ccBoqPrintPaper *{visibility:visible!important}
+
   .ccModalBackdrop{
     position:static!important;
     display:block!important;
-    width:210mm!important;
-    min-width:210mm!important;
+    width:auto!important;
     height:auto!important;
     min-height:0!important;
     margin:0!important;
     padding:0!important;
     background:#fff!important;
-    overflow:visible!important;
-    z-index:auto!important
+    overflow:visible!important
   }
+
   .ccBoqModal{
     position:static!important;
     display:block!important;
-    width:210mm!important;
-    max-width:210mm!important;
-    min-width:210mm!important;
+    width:auto!important;
+    max-width:none!important;
+    min-width:0!important;
     height:auto!important;
     max-height:none!important;
-    min-height:297mm!important;
+    min-height:0!important;
     margin:0!important;
-    padding:12mm 12mm 15mm!important;
-    box-sizing:border-box!important;
+    padding:0!important;
     background:#fff!important;
-    color:#172033!important;
+    color:#1d2635!important;
+    border:0!important;
     border-radius:0!important;
     box-shadow:none!important;
     overflow:visible!important
   }
-  .ccBoqModal .ccModalHead{
-    display:flex!important;
-    justify-content:space-between!important;
-    align-items:flex-start!important;
-    border-bottom:2px solid #172033!important;
-    padding-bottom:5mm!important;
-    margin-bottom:5mm!important
-  }
-  .ccBoqModal .ccModalHead>button,
-  .ccBoqModal .ccModalActions,
-  .ccBoqModal .ccRowDelete,
-  .ccBoqModal .ccBoqHead>button{
-    display:none!important
-  }
-  .ccBoqModal .ccModalHead h2{
-    margin:1mm 0!important;
-    font-size:20pt!important;
-    line-height:1.15!important;
-    color:#172033!important
-  }
-  .ccBoqModal .ccModalHead p{
-    margin:1mm 0!important;
-    font-size:9pt!important;
-    color:#667085!important
-  }
-  .ccBoqModal .ccEyebrow{
-    font-size:7pt!important;
-    letter-spacing:1.5pt!important;
-    color:#667085!important
-  }
-  .ccBoqSummary{
-    display:grid!important;
-    grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,.65fr)!important;
-    gap:3mm!important;
-    margin-bottom:5mm!important
-  }
-  .ccBoqSummary>div{
-    background:#f7f8fa!important;
-    border:1px solid #dfe4eb!important;
-    border-radius:0!important;
-    padding:3mm!important
-  }
-  .ccBoqSummary span{
-    font-size:7pt!important;
-    color:#667085!important
-  }
-  .ccBoqSummary b{
-    font-size:9pt!important;
-    margin-top:1.5mm!important;
-    color:#172033!important
-  }
-  .ccBoqHead{
-    display:flex!important;
-    justify-content:space-between!important;
-    align-items:center!important;
-    margin:4mm 0 2mm!important
-  }
-  .ccBoqHead h3{
-    margin:0!important;
-    font-size:11pt!important;
-    color:#172033!important
-  }
-  .ccBoqHead small{
-    font-size:7pt!important;
-    color:#667085!important
-  }
-  .ccBoqTable{
-    display:block!important;
-    width:100%!important;
-    max-width:none!important;
-    overflow:visible!important;
-    border:1px solid #cfd5dd!important;
-    border-radius:0!important
-  }
-  .ccBoqRow{
-    display:grid!important;
-    grid-template-columns:27mm minmax(0,1fr) 14mm 16mm 25mm 0!important;
-    width:100%!important;
-    min-width:0!important;
-    gap:0!important;
-    padding:0!important;
-    border-bottom:1px solid #dfe4eb!important;
-    align-items:stretch!important
-  }
-  .ccBoqRow:last-child{border-bottom:0!important}
-  .ccBoqRow>*{
-    min-width:0!important;
-    box-sizing:border-box!important;
-    padding:2.5mm 2mm!important;
-    border:0!important;
-    border-right:1px solid #dfe4eb!important;
-    border-radius:0!important;
-    background:#fff!important;
-    font-size:7.5pt!important;
-    color:#172033!important;
-    overflow-wrap:anywhere!important
-  }
-  .ccBoqRow>*:last-child{
-    border-right:0!important;
-    padding:0!important
-  }
-  .ccBoqHeader{
-    background:#172033!important;
-    color:#fff!important;
-    font-weight:700!important;
-    page-break-after:avoid!important
-  }
-  .ccBoqHeader>*{
-    background:#172033!important;
-    color:#fff!important;
-    font-size:7pt!important;
-    padding:2.5mm 2mm!important
-  }
-  .ccBoqRow input{
-    width:100%!important;
-    height:auto!important;
-    min-height:0!important;
-    padding:0!important;
-    border:0!important;
-    outline:0!important;
-    box-shadow:none!important;
-    background:transparent!important;
-    font:inherit!important;
-    color:inherit!important
-  }
-  .ccBoqTotals{
-    display:flex!important;
-    justify-content:flex-end!important;
-    padding:4mm 0!important;
-    font-size:9pt!important;
-    page-break-inside:avoid!important
-  }
-  .ccBoqTotals b{
-    font-size:12pt!important;
-    margin-left:5mm!important
-  }
-  .ccBoqRow{
-    page-break-inside:avoid!important;
-    break-inside:avoid!important
-  }
-  .ccBoqModal:after{
-    content:"Generated by Lead2Sales  •  BOQ / Presales Document";
-    display:block!important;
-    margin-top:12mm!important;
-    padding-top:3mm!important;
-    border-top:1px solid #dfe4eb!important;
-    color:#98a2b3!important;
-    font-size:7pt!important;
-    text-align:right!important
-  }
-}
 
-/* Legacy professional quotation design used by BOQ print preview */
-.ccBoqPrintPaper{display:none}
-.ccPrintBillTo,.ccPrintBrand,.ccPrintBottom{display:grid}
-@media print{
-  .ccBoqModal>*{visibility:hidden!important}
-  .ccBoqModal>.ccBoqPrintPaper{visibility:visible!important}
-  .ccBoqPrintPaper,.ccBoqPrintPaper *{visibility:visible!important}
-  .ccBoqPrintPaper{
+  /* Do not merely hide these with visibility: hidden; display:none removes
+     their physical layout height and prevents blank pages in print preview. */
+  .ccBoqModal>*:not(.ccBoqPrintPaper){display:none!important}
+  .ccBoqModal>.ccBoqPrintPaper{
     display:block!important;
     position:static!important;
-    width:210mm!important;
-    min-height:297mm!important;
+    width:100%!important;
+    min-height:0!important;
+    height:auto!important;
     box-sizing:border-box!important;
     margin:0!important;
-    padding:14mm 13mm 16mm!important;
+    padding:0!important;
     background:#fff!important;
     color:#1d2635!important;
     font-family:Arial,Helvetica,sans-serif!important
   }
+
   .ccPrintBrand{
     display:flex!important;
     justify-content:space-between!important;
     align-items:flex-start!important;
-    gap:15mm!important
+    gap:15mm!important;
+    padding-top:2mm!important
   }
   .ccPrintBrand>div:first-child{flex:1}
-  .ccPrintBrand b{display:block;font-size:20pt!important;margin-bottom:2mm!important}
+  .ccPrintBrand b{display:block;font-size:20pt!important;line-height:1.15!important;margin-bottom:2mm!important}
   .ccPrintBrand small,.ccPrintMeta span{display:block;font-size:8pt!important;color:#7b8492!important;margin-top:1mm!important}
   .ccPrintMeta{text-align:right!important;display:grid!important;gap:1mm!important}
   .ccPrintMeta b{font-size:15pt!important}
   .ccBoqPrintPaper hr{border:0!important;border-top:1px solid #dfe4eb!important;margin:4mm 0 0!important}
+
   .ccPrintBillTo{
     display:grid!important;
     grid-template-columns:1fr 1fr!important;
@@ -440,9 +297,30 @@
   .ccPrintBillTo small{font-size:7pt!important;color:#8791a1!important;font-weight:800!important;letter-spacing:1px!important}
   .ccPrintBillTo b{font-size:11pt!important}
   .ccPrintBillTo span{font-size:8.5pt!important;color:#596578!important}
-  .ccBoqPrintPaper table{width:100%!important;border-collapse:collapse!important;font-size:8pt!important;table-layout:fixed!important}
-  .ccBoqPrintPaper th{background:#f5f7f9!important;text-align:left!important;padding:3mm 2.5mm!important;font-size:7.5pt!important;border-bottom:1px solid #dfe4eb!important}
-  .ccBoqPrintPaper td{padding:3mm 2.5mm!important;border-bottom:1px solid #e9edf1!important;vertical-align:top!important}
+
+  .ccBoqPrintPaper table{
+    width:100%!important;
+    border-collapse:collapse!important;
+    font-size:8pt!important;
+    table-layout:fixed!important;
+    page-break-inside:auto!important
+  }
+  .ccBoqPrintPaper thead{display:table-header-group!important}
+  .ccBoqPrintPaper tbody{display:table-row-group!important}
+  .ccBoqPrintPaper tr{page-break-inside:avoid!important;break-inside:avoid!important}
+  .ccBoqPrintPaper th{
+    background:#f5f7f9!important;
+    text-align:left!important;
+    padding:3mm 2.5mm!important;
+    font-size:7.5pt!important;
+    border-bottom:1px solid #dfe4eb!important
+  }
+  .ccBoqPrintPaper td{
+    padding:3mm 2.5mm!important;
+    border-bottom:1px solid #e9edf1!important;
+    vertical-align:top!important;
+    overflow-wrap:anywhere!important
+  }
   .ccBoqPrintPaper th:nth-child(1),.ccBoqPrintPaper td:nth-child(1){width:8%!important}
   .ccBoqPrintPaper th:nth-child(2),.ccBoqPrintPaper td:nth-child(2){width:46%!important}
   .ccBoqPrintPaper th:nth-child(3),.ccBoqPrintPaper td:nth-child(3){width:14%!important}
@@ -450,22 +328,24 @@
   .ccBoqPrintPaper th:nth-child(5),.ccBoqPrintPaper td:nth-child(5){width:16%!important;text-align:right!important}
   .ccBoqPrintPaper td b{display:block;font-size:8.5pt!important}
   .ccBoqPrintPaper td small{display:block;color:#7b8492!important;margin-top:1.5mm!important;line-height:1.4!important}
+
+  /* Company/customer header repeats with the table header on page 2+. */
   .ccPrintRepeatHeader{display:table-row!important;page-break-inside:avoid!important}
   .ccPrintRepeatHeader>th{background:#fff!important;padding:0 0 3mm!important;border:0!important}
-  .ccBoqPrintPaper thead{display:table-header-group!important}
-  .ccBoqPrintPaper tr{page-break-inside:avoid!important}
+
   .ccPrintBottom{
     display:grid!important;
     grid-template-columns:1fr 68mm!important;
     gap:12mm!important;
     margin-top:8mm!important;
-    page-break-inside:avoid!important
+    page-break-inside:avoid!important;
+    break-inside:avoid!important
   }
   .ccPrintBottom>div:first-child{font-size:8pt!important;line-height:1.55!important;color:#697487!important}
   .ccPrintBottom>div:first-child>b{display:block;color:#1d2635!important;font-size:8.5pt!important;margin-bottom:2mm!important}
   .ccPrintTotals{display:grid!important;gap:2.5mm!important;font-size:8pt!important}
   .ccPrintTotals span,.ccPrintTotals strong{display:flex!important;justify-content:space-between!important;gap:8mm!important}
   .ccPrintTotals strong{font-size:11pt!important;padding-top:3mm!important;border-top:2px solid #1d2635!important}
-  .ccPrintSignature{text-align:right!important;margin-top:15mm!important;font-size:8pt!important;line-height:1.7!important;page-break-inside:avoid!important}
+  .ccPrintSignature{text-align:right!important;margin-top:15mm!important;font-size:8pt!important;line-height:1.7!important;page-break-inside:avoid!important;break-inside:avoid!important}
   .ccPrintSignature b{font-size:8.5pt!important}
 }
