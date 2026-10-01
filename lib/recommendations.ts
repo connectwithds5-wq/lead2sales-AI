@@ -8,6 +8,9 @@ export type Recommendation = {
   reason: string;
   required: boolean;
   review_required?: boolean;
+  priority?: "mandatory" | "recommended" | "optional";
+  verification?: "manufacturer_verified" | "site_verified" | "planning_allowance" | "manual_verification";
+  source?: string;
 };
 
 const has = (t: string, words: string[]) => words.some((w) => t.includes(w));
@@ -154,31 +157,319 @@ export function recommendRequirement(input: string): Recommendation[] {
     if (has(t, ["vpn"])) addUnique(out, { category:"Firewall", subcategory:"VPN", item_name:"VPN Configuration", specification:"Site-to-site or remote-access VPN; topology/users to be confirmed", quantity:1, unit:"Job", reason:"VPN requirement detected.", required:false, review_required:true });
   }
 
-  // Access control
+  // Access control — manufacturer/model-aware engineering
   const doors = firstNumber(t, [
     /(\d+)\s*(?:door|doors)\b/,
     /(?:door|doors)\s*(?:x|:|of)?\s*(\d+)\b/,
   ]);
-  if (has(t, ["access control","door access","attendance","fingerprint","face recognition","rfid","biometric","magnetic lock","em lock"]) || doors > 0) {
-    const d = doors || 1;
-    if (has(t, ["access control","door access"]) && !doors) manual(out, "Access-control door count", input);
-    const controllerDoors=4;
-    const controllers=Math.ceil(d/controllerDoors);
-    const accessCable=d*30;
-    addUnique(out, { category:"Access Control", subcategory:"Controller", item_name:"4-Door Access Controller", specification:"4-door network access controller; "+controllers+" controller(s) required for "+d+" doors; provide spare capacity where practical, with enclosure/power/communication as applicable", quantity:controllers, unit:"Nos", reason:"Controller quantity sized at 4 controlled doors per controller for "+d+" doors.", required:true, review_required:!doors });
-    const readerNote=has(t,["face","facial","face recognition"])?"Face recognition reader":"RFID/biometric reader";
-    addUnique(out, { category:"Access Control", subcategory:"Reader", item_name:"Access Reader", specification:readerNote+" per controlled door; technology, outdoor rating and enrollment capacity to be confirmed", quantity:d, unit:"Nos", reason:"One reader per controlled door/entry point.", required:true, review_required:true });
-    const lockType=has(t,["magnetic lock","maglock","electromagnetic"])?"Electromagnetic door lock":"Electric lock / electromagnetic lock";
-    addUnique(out, { category:"Access Control", subcategory:"Lock", item_name:lockType, specification:"Door lock compatible with door type, fire egress requirements and selected access system", quantity:d, unit:"Nos", reason:"One controlled locking device per door.", required:true, review_required:true });
-    addUnique(out, { category:"Access Control", subcategory:"Exit Button", item_name:"Exit Push Button / REX", specification:"Exit release device", quantity:d, unit:"Nos", reason:"Exit-side release per controlled door.", required:false });
-    addUnique(out, { category:"Access Control", subcategory:"Door Contact", item_name:"Door Contact", specification:"Door status contact", quantity:d, unit:"Nos", reason:"Door status monitoring.", required:false });
-    addUnique(out, { category:"Access Control", subcategory:"Power", item_name:"Access Control Power Supply", specification:"Regulated SMPS/UPS-backed power supply sized for controllers, locks and readers; final VA/A rating after selected lock load", quantity:controllers, unit:"Nos", reason:"Power distribution sized per controller group.", required:true, review_required:true });
-    addUnique(out, { category:"Access Control", subcategory:"Enclosure", item_name:"Access Control Panel Enclosure", specification:"Lockable enclosure with power distribution and battery provision as required", quantity:controllers, unit:"Nos", reason:"Controller and power hardware require secure enclosure.", required:true });
-    addUnique(out, { category:"Cable", subcategory:"Access Control Cabling", item_name:"Access Control Cable", specification:"Low-voltage access-control cable; planning allowance 30 m per door; final route after site survey", quantity:accessCable, unit:"Meter", reason:"30 m planning allowance × "+d+" controlled doors.", required:true, review_required:true });
-    addUnique(out, { category:"Access Control", subcategory:"Software", item_name:"Access Control Software / License", specification:"Central management software/license sized for "+d+" doors and required users/attendance features", quantity:1, unit:"Set", reason:"Central access management is required for multi-door deployments.", required:true, review_required:true });
-    addUnique(out, { category:"Service", subcategory:"Installation", item_name:"Access Control Installation & Configuration", specification:"Reader, controller, lock, exit device, door contact, power, wiring, software configuration, testing and commissioning", quantity:d, unit:"Door", reason:"Complete installation and commissioning per controlled door.", required:true });
-  }
 
+  const accessMentioned = has(t, ["access control","door access","attendance","fingerprint","face recognition","rfid","biometric","magnetic lock","em lock"]) || doors > 0;
+
+  type ControllerProfile = {
+    manufacturer: string;
+    model: string;
+    doorCapacity: number;
+    readerInterfaces: string;
+    controllerNotes: string;
+    software: string;
+    source: string;
+    architecture: "distributed" | "centralized";
+    expansionModule?: { name:string; doors:number; quantityFor:(d:number)=>number };
+  };
+
+  const profiles: ControllerProfile[] = [
+    {
+      manufacturer:"Hikvision",
+      model:"DS-K2601",
+      doorCapacity:1,
+      readerInterfaces:"2 card-reader interfaces (RS-485/Wiegand configuration per datasheet)",
+      controllerNotes:"TCP/IP + RS-485; 1-door controller",
+      software:"HikCentral Professional / iVMS ecosystem; final license must match deployed platform",
+      source:"https://www.hikvision.com/",
+      architecture:"distributed"
+    },
+    {
+      manufacturer:"Hikvision",
+      model:"DS-K2602",
+      doorCapacity:2,
+      readerInterfaces:"2 RS-485 or 2 Wiegand reader interfaces; 2 door sensors and 2 exit buttons",
+      controllerNotes:"TCP/IP + RS-485; 2-door controller",
+      software:"HikCentral Professional; access-control license sized to final door count",
+      source:"https://www.hikvision.com/",
+      architecture:"distributed"
+    },
+    {
+      manufacturer:"Hikvision",
+      model:"DS-K2604",
+      doorCapacity:4,
+      readerInterfaces:"4 RS-485 or up to 4 Wiegand reader interfaces; 4 door sensors and 4 exit buttons",
+      controllerNotes:"TCP/IP + RS-485; 4-door controller",
+      software:"HikCentral Professional; access-control license sized to final door count",
+      source:"https://www.hikvision.com/",
+      architecture:"distributed"
+    },
+    {
+      manufacturer:"ZKTeco",
+      model:"C3-100",
+      doorCapacity:1,
+      readerInterfaces:"Wiegand; TCP/IP and RS485",
+      controllerNotes:"1-door controller; 12 VDC, 1.5 A class supply",
+      software:"ZKBio CVAccess / compatible ZKTeco software; license to be verified",
+      source:"https://www.zkteco.com/",
+      architecture:"distributed"
+    },
+    {
+      manufacturer:"ZKTeco",
+      model:"C3-200",
+      doorCapacity:2,
+      readerInterfaces:"Wiegand; TCP/IP and RS485",
+      controllerNotes:"2-door controller; 12 VDC, 1.5 A class supply",
+      software:"ZKBio CVAccess / compatible ZKTeco software; license to be verified",
+      source:"https://www.zkteco.com/",
+      architecture:"distributed"
+    },
+    {
+      manufacturer:"ZKTeco",
+      model:"C3-400",
+      doorCapacity:4,
+      readerInterfaces:"Wiegand; TCP/IP and RS485",
+      controllerNotes:"4-door controller; 12 VDC, 1.5 A class supply; can be configured as four single-direction doors or two two-way doors",
+      software:"ZKBio CVAccess / compatible ZKTeco software; license to be verified",
+      source:"https://www.zkteco.com/",
+      architecture:"distributed"
+    },
+    {
+      manufacturer:"Suprema",
+      model:"CoreStation CS-40",
+      doorCapacity:4,
+      readerInterfaces:"4 onboard reader channels; OSDP/Wiegand; 4 relays; up to 64 RS-485 devices / 132 Wiegand devices with supported modules",
+      controllerNotes:"Centralized biometric controller; 4 onboard relays. Door expansion uses supported Door Modules / Secure I/O architecture.",
+      software:"BioStar X; base license tier must be selected from door/user/operator requirements",
+      source:"https://www.supremainc.com/",
+      architecture:"centralized",
+      expansionModule:{
+        name:"Suprema DM-20 Door Module",
+        doors:4,
+        quantityFor:(d:number)=>Math.max(0,Math.ceil(Math.max(0,d-4)/4))
+      }
+    }
+  ];
+
+  const modelMatch = profiles.find(p => {
+    const m = p.model.toLowerCase();
+    return t.includes(m.toLowerCase()) || t.replace(/[-\s]/g,"").includes(m.replace(/[-\s]/g,""));
+  });
+
+  const explicitCapacity = firstNumber(t, [
+    /(?:controller|panel|control\s*panel)\s*(?:capacity|supports?|for)?\s*(\d+)\s*(?:doors?|door)\b/,
+    /(\d+)\s*[- ]?door\s*(?:controller|panel)\b/
+  ]);
+
+  const d = doors || 1;
+  if (accessMentioned) {
+    if (has(t, ["access control","door access"]) && !doors) {
+      manual(out, "Access-control door count", input);
+    }
+
+    let profile = modelMatch;
+    const capacity = modelMatch?.doorCapacity || explicitCapacity || 4;
+    const controllerQty = Math.ceil(d / capacity);
+
+    const readerNote = has(t,["face","facial","face recognition"])
+      ? "Face recognition reader"
+      : has(t,["fingerprint"])
+        ? "Fingerprint/biometric reader"
+        : "RFID/card reader";
+    const lockType = has(t,["magnetic lock","maglock","electromagnetic"])
+      ? "Electromagnetic door lock"
+      : "Electric / electromagnetic door lock";
+
+    const verification = profile ? "manufacturer_verified" : explicitCapacity ? "manual_verification" : "manual_verification";
+    const source = profile?.source || "Manufacturer/model not identified from requirement";
+
+    if (!profile) {
+      addUnique(out, {
+        category:"Engineering",
+        subcategory:"Architecture Validation",
+        item_name:"MODEL VERIFICATION REQUIRED",
+        specification:"No trusted manufacturer/model profile was identified. Do not finalize controller capacity, reader interface, software architecture, PSU sizing or licensing until the make/model or approved datasheet is confirmed.",
+        quantity:1, unit:"Job",
+        reason:"The system will not silently substitute a generic controller when exact manufacturer architecture is required.",
+        required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+      });
+    }
+
+    addUnique(out, {
+      category:"Access Control",
+      subcategory:"Controller",
+      item_name: profile ? profile.model : (capacity+"-Door Access Controller"),
+      specification: profile
+        ? profile.manufacturer+" "+profile.model+"; "+profile.controllerNotes+"; reader interface: "+profile.readerInterfaces+". Architecture: "+profile.architecture+"."
+        : capacity+"-door controller; make/model and interface must be confirmed before ordering.",
+      quantity:controllerQty, unit:"Nos",
+      reason: profile
+        ? "Controller quantity calculated from "+d+" doors ÷ "+capacity+" doors/controller = "+controllerQty+" controller(s)."
+        : "Planning quantity based on explicitly stated/assumed "+capacity+"-door capacity; manufacturer verification required.",
+      required:true, review_required:!profile, priority:"mandatory", verification:verification as any, source
+    });
+
+    if (profile?.expansionModule) {
+      const moduleQty=profile.expansionModule.quantityFor(d);
+      if (moduleQty>0) addUnique(out, {
+        category:"Access Control", subcategory:"Expansion Module",
+        item_name:profile.expansionModule.name,
+        specification:"Manufacturer expansion architecture for the selected centralized controller; each module provides up to "+profile.expansionModule.doors+" doors in the stated architecture.",
+        quantity:moduleQty, unit:"Nos",
+        reason:"Expansion calculated for "+d+" doors beyond the "+profile.doorCapacity+" onboard controller doors.",
+        required:true, review_required:false, priority:"mandatory", verification:"manufacturer_verified", source:profile.source
+      });
+    }
+
+    addUnique(out, {
+      category:"Access Control", subcategory:"Reader",
+      item_name:readerNote,
+      specification:readerNote+" per controlled door; interface must be compatible with "+(profile ? profile.model : "selected controller")+" ("+(profile?.readerInterfaces || "Wiegand/OSDP/interface to be confirmed")+"). Outdoor/IP/IK rating, credential capacity and authentication method to be confirmed.",
+      quantity:d, unit:"Nos",
+      reason:"One entry reader per controlled door; exact interface is derived from the selected controller profile where available.",
+      required:true, review_required:true, priority:"mandatory", verification:profile ? "manufacturer_verified" : "manual_verification", source:profile?.source
+    });
+
+    addUnique(out, {
+      category:"Access Control", subcategory:"Lock",
+      item_name:lockType,
+      specification:"One lock per controlled door; exact holding force/current, fail-safe/fail-secure behavior, door type and fire-egress compatibility must be validated against the selected door hardware.",
+      quantity:d, unit:"Nos",
+      reason:"One controlled locking device per door; electrical load is intentionally not invented without the selected lock model.",
+      required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+    });
+
+    addUnique(out, {
+      category:"Access Control", subcategory:"Exit Device",
+      item_name:"Exit Push Button / REX",
+      specification:"Request-to-exit device appropriate to the door and controller input architecture.",
+      quantity:d, unit:"Nos",
+      reason:"One exit release input per controlled door unless the approved door hardware uses another REX method.",
+      required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+    });
+
+    addUnique(out, {
+      category:"Access Control", subcategory:"Door Monitoring",
+      item_name:"Door Contact",
+      specification:"Door position contact per controlled door; interface compatible with selected controller input.",
+      quantity:d, unit:"Nos",
+      reason:"One door-status input per controlled door.",
+      required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+    });
+
+    addUnique(out, {
+      category:"Access Control", subcategory:"Power",
+      item_name:"Access Control Power Supply / Battery Backup",
+      specification:"Power supply and battery backup sized from the actual controller + reader + lock current draw and required autonomy. Do not finalize amperage until selected hardware is known.",
+      quantity:controllerQty, unit:"Set",
+      reason:"One power distribution point per controller group is a planning architecture; final VA/A rating requires actual device loads.",
+      required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+    });
+
+    addUnique(out, {
+      category:"Access Control", subcategory:"Enclosure",
+      item_name:"Access Control Panel Enclosure",
+      specification:profile?.manufacturer==="Hikvision" ? "Controller enclosure / approved panel housing compatible with "+profile.model+"; battery provision as required." : "Lockable enclosure sized for selected controller, power supply, battery and termination hardware.",
+      quantity:controllerQty, unit:"Nos",
+      reason:"Enclosure count follows controller count; exact enclosure/model is manufacturer/site dependent.",
+      required:true, review_required:true, priority:"mandatory", verification:profile ? "manufacturer_verified" : "manual_verification", source:profile?.source
+    });
+
+    const siteCable = firstNumber(t, [
+      /(?:cable|wiring|route|routing)\s*(?:length|allowance)?\s*(?:of|:|=)?\s*(\d+)\s*(?:m|meter|metre|meters|metres)\b/,
+      /(\d+)\s*(?:m|meter|metre|meters|metres)\s*(?:per\s*door|each\s*door)/
+    ]);
+    const totalCable = siteCable
+      ? (t.includes("per door") || t.includes("each door") ? siteCable*d : siteCable)
+      : d*30;
+
+    addUnique(out, {
+      category:"Cable", subcategory:"Access Control Cabling",
+      item_name:"Access Control Cable",
+      specification:siteCable
+        ? "Cable route/allowance explicitly supplied in requirement: "+totalCable+" m; final route, conductor count, shielding and fire rating to be checked against selected devices/site."
+        : "Low-voltage access-control cable; 30 m/door is a PLANNING ALLOWANCE only. Replace with measured drawing/site-survey route before final quotation.",
+      quantity:totalCable, unit:"Meter",
+      reason:siteCable
+        ? "Quantity derived from the stated site/cable allowance."
+        : "No route length was supplied, so 30 m/door is shown only as a planning allowance and is flagged for site verification.",
+      required:true, review_required:true, priority:"mandatory", verification:siteCable ? "site_verified" : "planning_allowance"
+    });
+
+    let licenseSpec="";
+    let licenseReason="";
+    let licenseReview=true;
+    if (profile?.manufacturer==="Suprema") {
+      const tier = d<=5 ? "Starter" : d<=32 ? "Essential" : d<=128 ? "Advanced" : d<=500 ? "Enterprise" : "Elite";
+      licenseSpec="BioStar X base license: "+tier+" tier supports up to "+(d<=5?5:d<=32?32:d<=128?128:d<=500?500:2000)+" doors. Additional advanced features (anti-passback, fire alarm, intrusion, muster, occupancy, elevator, interlock) may require add-on licenses depending on tier.";
+      licenseReason="License tier selected from manufacturer-published door thresholds for "+d+" doors.";
+      licenseReview=false;
+    } else if (profile?.manufacturer==="Hikvision") {
+      const tier = d<=2 ? 2 : 16;
+      const extra = Math.max(0, d-tier);
+      licenseSpec="HikCentral Professional Access Control Base: "+tier+"-door base plus "+extra+" × 1-door add-on license(s), subject to the deployed HikCentral version/product SKU and final order configuration.";
+      licenseReason="HikCentral published access-control licensing uses 2-door/16-door bases with 1-door additions.";
+      licenseReview=false;
+    } else if (profile?.manufacturer==="ZKTeco") {
+      licenseSpec="ZKTeco access-control software/license package sized for "+d+" doors; exact current SKU/tier must be selected from the deployed ZKBio CVAccess/CVSecurity licensing catalog.";
+      licenseReason="ZKTeco software is model/platform dependent; current license SKU must be confirmed before commercial release.";
+    } else {
+      licenseSpec="Access-control management software/license sized for "+d+" doors; manufacturer SKU/tier required.";
+      licenseReason="Exact manufacturer/model is not known, so a license SKU is not invented.";
+    }
+    addUnique(out, {
+      category:"Access Control", subcategory:"Software / Licensing",
+      item_name:profile ? profile.software : "Access Control Management Software / License",
+      specification:licenseSpec,
+      quantity:1, unit:"Set",
+      reason:licenseReason,
+      required:true, review_required:licenseReview, priority:"mandatory",
+      verification:licenseReview ? "manual_verification" : "manufacturer_verified",
+      source:profile?.source
+    });
+
+    if (profile?.manufacturer==="Hikvision") {
+      addUnique(out, {
+        category:"Server", subcategory:"Access Control",
+        item_name:"HikCentral Server / VM",
+        specification:"Server or VM for HikCentral Professional access control; final sizing must follow the deployed HikCentral version and selected feature set. Published guidance includes Windows Server and RAID/network requirements for ACS deployments.",
+        quantity:1, unit:"Nos",
+        reason:"HikCentral access control is centrally managed and the selected platform requires server/VM infrastructure.",
+        required:true, review_required:true, priority:"mandatory", verification:"manufacturer_verified", source:profile.source
+      });
+    } else if (profile?.manufacturer==="Suprema") {
+      addUnique(out, {
+        category:"Server", subcategory:"Access Control",
+        item_name:"BioStar X Server / VM",
+        specification:"Server/VM sized for BioStar X users, devices, events and enabled modules; final CPU/RAM/storage to follow the deployed BioStar X release and architecture.",
+        quantity:1, unit:"Nos",
+        reason:"BioStar X is the central management platform for the selected CoreStation architecture.",
+        required:true, review_required:true, priority:"mandatory", verification:"manufacturer_verified", source:profile.source
+      });
+    }
+
+    addUnique(out, {
+      category:"Service", subcategory:"Engineering",
+      item_name:"Access Control Detailed Engineering / Site Verification",
+      specification:"Door schedule validation, door handing, lock type, reader interface, controller locations, cable routes, network ports, power/battery sizing, software/licensing and fire-egress requirements.",
+      quantity:1, unit:"Job",
+      reason:"Final BOQ must be validated against actual door hardware and site conditions before commercial release.",
+      required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+    });
+
+    addUnique(out, {
+      category:"Service", subcategory:"Installation",
+      item_name:"Access Control Installation, Configuration & Commissioning",
+      specification:"Install and terminate reader, controller, lock, REX, door contact, power, network, software; configure access levels; test and commission each door.",
+      quantity:d, unit:"Door",
+      reason:"Complete implementation and commissioning per controlled door.",
+      required:true, review_required:true, priority:"mandatory", verification:"manual_verification"
+    });
+  }
   // Intercom
   const intercomCount = firstNumber(t, [/(\d+)\s*(?:intercom|door\s*phone|video\s*door)/]);
   if (has(t, ["intercom","video door","door phone"]) || intercomCount > 0) {
