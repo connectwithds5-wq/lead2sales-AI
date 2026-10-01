@@ -198,7 +198,8 @@ export default function SalesCommandCenter(){
      printable.classList.add("ccBoqPdfCapture");
      document.body.appendChild(printable);
      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-     // @ts-expect-error html2pdf.js has no bundled TypeScript declaration.\n     const { default: html2pdf } = await import("html2pdf.js");
+     // @ts-expect-error html2pdf.js has no bundled TypeScript declaration.
+     const { default: html2pdf } = await import("html2pdf.js");
      const pdfDataUri=await html2pdf().set({
        margin:0,
        filename:"Quotation-"+quoteNumber+".pdf",
@@ -207,7 +208,9 @@ export default function SalesCommandCenter(){
        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
      }).from(printable).outputPdf("datauristring");
      printable.remove();
-     const filename="Quotation-"+quoteNumber+".pdf";\n     const pdfBase64=String(pdfDataUri).split(",")[1]||"";\n     if(!pdfBase64) throw new Error("Could not generate the BOQ PDF.");
+     const filename="Quotation-"+quoteNumber+".pdf";
+     const pdfBase64=String(pdfDataUri).split(",")[1]||"";
+     if(!pdfBase64) throw new Error("Could not generate the BOQ PDF.");
      let shareUrl="";
      if(available.includes("whatsapp")){
        const shareRes=await fetch("/api/quotation-share",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await supabase.auth.getSession()).data.session?.access_token},body:JSON.stringify({quoteId,pdfBase64,filename})});
