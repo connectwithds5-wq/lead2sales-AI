@@ -198,7 +198,6 @@ export default function SalesCommandCenter(){
      printable.classList.add("ccBoqPdfCapture");
      document.body.appendChild(printable);
      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-     // @ts-expect-error html2pdf.js has no bundled TypeScript declaration.
      const { default: html2pdf } = await import("html2pdf.js");
      const pdfDataUri=await html2pdf().set({
        margin:0,
