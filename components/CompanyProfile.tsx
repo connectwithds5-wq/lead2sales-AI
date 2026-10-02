@@ -18,7 +18,7 @@ export default function CompanyProfile(){
  const [gmail,setGmail]=useState({connected:false,email:null as string|null}),[gmailBusy,setGmailBusy]=useState(false);
  const [inboundEmail,setInboundEmail]=useState(""),[inboundEnabled,setInboundEnabled]=useState(true),[inboundSaving,setInboundSaving]=useState(false);
  useEffect(()=>{(async()=>{const cid=localStorage.getItem("lead2sales_company_id");if(!cid){router.replace("/onboarding");return;}const {data,error}=await supabase.from("companies").select("id,name,legal_name,address,phone,email,gst_number,logo_url").eq("id",cid).single();if(error){setError(error.message);setLoading(false);return;}setForm({name:data?.name||"",legal_name:data?.legal_name||"",address:data?.address||"",phone:data?.phone||"",email:data?.email||"",gst_number:data?.gst_number||"",logo_url:data?.logo_url||""});
-   const session=(await supabase.auth.getSession()).data.session; const headers=session?{Authorization:"Bearer "+session.access_token}:{};
+   const session=(await supabase.auth.getSession()).data.session; const headers:HeadersInit=session?{Authorization:"Bearer "+session.access_token}:{};
    const [gs,ins]=await Promise.all([fetch("/api/gmail/status?company_id="+encodeURIComponent(cid),{headers}),supabase.from("email_lead_sources").select("inbound_address,enabled").eq("company_id",cid).maybeSingle()]);
    const gd=await gs.json().catch(()=>({})); if(gs.ok)setGmail({connected:!!gd.connected,email:gd.email||null});
    if(ins.data){setInboundEmail(ins.data.inbound_address||"");setInboundEnabled(ins.data.enabled!==false);} setLoading(false);})()},[router]);
