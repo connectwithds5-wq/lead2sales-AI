@@ -10,14 +10,14 @@ const tokens=(s:string)=>new Set(norm(s).split(" ").filter(x=>x.length>1));
 function findNumber(input:string,patterns:RegExp[],fallback=0){for(const p of patterns){const m=input.match(p);if(m)return Number(m[1]);}return fallback;}
 function capacityNumber(s?:string|null){
  const t=norm(s);
- const m=t.match(/(\\d+)\\s*(?:channel|ch|port|ports|u)\\b/);
+ const m=t.match(/(\d+)\s*(?:channel|ch|port|ports|u)\b/);
  return m?Number(m[1]):0;
 }
 function requiredCapacity(item:Recommendation,input:string){
  const sub=norm(item.subcategory);
  const t=norm(input);
  if(sub==="nvr"){
-  const cams=findNumber(t,[/(\\d+)\\s*(?:cctv|cameras?|cams?)\\b/,(?:cctv|cameras?|cams?)\\s*(?:of|x|:)?\\s*(\\d+)\\b/]);
+  const cams=findNumber(t,[/(\d+)\s*(?:cctv|cameras?|cams?)\b/,(?:cctv|cameras?|cams?)\\s*(?:of|x|:)?\\s*(\\d+)\\b/]);
   if(cams>0) return Math.ceil(cams*1.2);
  }
  if(sub==="poe switch"){
