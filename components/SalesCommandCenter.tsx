@@ -171,6 +171,36 @@ export default function SalesCommandCenter(){
    setLeadWorkspaceBoq(rows);
    setBoqLoading(false);
  }
+ async function regenerateBoq(){
+   if(!boqLead)return;
+   const cid=await resolveCompanyId();
+   if(!cid){setError("Workspace not found.");return}
+   setBoqLoading(true); setError("");
+   const [{data:masterProducts,error:catalogError},{data:companyProducts,error:companyCatalogError}]=await Promise.all([
+     supabase.from("master_catalog_products").select("id,category,subcategory,brand,model,name,specification,unit,attributes").eq("active",true),
+     supabase.from("product_catalog").select("id,category,subcategory,brand,model,name,specification,unit,selling_price,master_product_id,active").eq("company_id",cid).eq("active",true)
+   ]);
+   if(catalogError){setError(catalogError.message);setBoqLoading(false);return}
+   if(companyCatalogError){setError(companyCatalogError.message);setBoqLoading(false);return}
+   const generated=buildEngineeringBoq(boqLead.requirement||"",masterProducts||[],companyProducts||[]);
+   const rows=generated.map((x:any)=>({
+     id:crypto.randomUUID(),company_id:cid,lead_id:boqLead.id,category:x.category||"Other",item_name:x.item_name,
+     specification:x.specification||"",quantity:Number(x.quantity)||1,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0,
+     notes:x.notes||x.reason||null,__persisted:false,master_product_id:x.master_product_id
+   }));
+   const {error:deleteError}=await supabase.from("lead_boq_items").delete().eq("company_id",cid).eq("lead_id",boqLead.id);
+   if(deleteError){setError(deleteError.message);setBoqLoading(false);return}
+   const insertRows=rows.map((x:any)=>({id:x.id,company_id:cid,lead_id:boqLead.id,category:x.category,item_name:x.item_name,specification:x.specification,quantity:x.quantity,unit:x.unit,unit_price:x.unit_price,notes:x.notes}));
+   if(insertRows.length){
+     const {error:insertError}=await supabase.from("lead_boq_items").insert(insertRows);
+     if(insertError){setError(insertError.message);setBoqLoading(false);return}
+   }
+   const {data:latest}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",boqLead.id).order("created_at",{ascending:true});
+   const persisted=(latest||[]).map((x:any)=>({...x,__persisted:true}));
+   setBoqItems(persisted); setLeadWorkspaceBoq(persisted);
+   await logLeadActivity(boqLead.id,"boq_regenerated","Existing BOQ replaced with a fresh engineering BOQ using the latest master catalogue and company pricing.");
+   setBoqLoading(false);
+ }
  async function sendToClient(){
    if(!boqLead)return;
    const missingWhatsapp=sendChannels.includes("whatsapp")&&!String(boqLead.phone||"").trim();
@@ -468,7 +498,7 @@ export default function SalesCommandCenter(){
      </div>
      <div className="ccModalActions"><button className="ccGhost" onClick={()=>setSelectedLead(null)}>Close</button><button className="ccPrimary" onClick={()=>{setSelectedLead(null);openBoq(selectedLead)}}>Continue to BOQ →</button></div>
    </div></div>}
-   {boqLead&&<div className="ccModalBackdrop" onClick={()=>!boqSaving&&setBoqLead(null)}><div className="ccModal ccBoqModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">QUOTE · BOQ WORKSPACE</span><h2>{boqLead.name}</h2><p>{boqLead.company_name||"Individual customer"} · {boqLead.lead_category||"Other"}</p></div><button onClick={()=>!boqSaving&&setBoqLead(null)}>×</button></div><div className="ccBoqSummary"><div><span>Requirement</span><b>{boqLead.requirement||"—"}</b></div><div><span>Estimated Value</span><b>{money(Number(boqLead.estimated_value||0))}</b></div><div><span>Items</span><b>{boqItems.length}</b></div></div>{boqLoading?<div className="ccEmpty">Building BOQ…</div>:<><div className="ccBoqHead"><div><b>Bill of Quantities</b><small>Edit quantity, specification and rate before quotation.</small></div><button className="ccGhost" onClick={()=>setBoqItems([...boqItems,{id:crypto.randomUUID(),__persisted:false,category:"Other",item_name:"",specification:"",quantity:1,unit:"Nos",unit_price:0,notes:""}])}>＋ Add Item</button></div><div className="ccBoqTable"><div className="ccBoqRow ccBoqHeader"><span>Item</span><span>Specification</span><span>Qty</span><span>Unit</span><span>Rate</span><span></span></div>{boqItems.map((x,i)=><div className="ccBoqRow" key={x.id||i}><input value={x.item_name||""} placeholder="Item name" onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,item_name:e.target.value,notes:""}:r))}/><input value={x.specification||""} placeholder="Specification" onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,specification:e.target.value,notes:""}:r))}/><input type="number" min="0" value={x.quantity??0} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,quantity:Number(e.target.value)}:r))}/><input value={x.unit||"Nos"} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,unit:e.target.value}:r))}/><input type="number" min="0" value={x.unit_price??0} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,unit_price:Number(e.target.value)}:r))}/><button className="ccRowDelete" onClick={()=>setBoqItems(boqItems.filter((_,j)=>j!==i))}>Remove</button></div>)}{!boqItems.length&&<div className="ccEmpty">No BOQ items yet. Add an item to start.</div>}</div><div className="ccBoqTotals"><span>Subtotal <b>{money(boqItems.reduce((a,x)=>a+Number(x.quantity||0)*Number(x.unit_price||0),0))}</b></span></div></>}<div className="ccBoqPrintPaper">
+   {boqLead&&<div className="ccModalBackdrop" onClick={()=>!boqSaving&&setBoqLead(null)}><div className="ccModal ccBoqModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">QUOTE · BOQ WORKSPACE</span><h2>{boqLead.name}</h2><p>{boqLead.company_name||"Individual customer"} · {boqLead.lead_category||"Other"}</p></div><button onClick={()=>!boqSaving&&setBoqLead(null)}>×</button></div><div className="ccBoqSummary"><div><span>Requirement</span><b>{boqLead.requirement||"—"}</b></div><div><span>Estimated Value</span><b>{money(Number(boqLead.estimated_value||0))}</b></div><div><span>Items</span><b>{boqItems.length}</b></div></div>{boqLoading?<div className="ccEmpty">Building BOQ…</div>:<><div className="ccBoqHead"><div><b>Bill of Quantities</b><small>Edit quantity, specification and rate before quotation.</small></div><div className="ccBoqHeadActions"><button className="ccGhost" disabled={boqLoading||boqSaving} onClick={regenerateBoq}>↻ Regenerate from Latest Catalogue</button><button className="ccGhost" onClick={()=>setBoqItems([...boqItems,{id:crypto.randomUUID(),__persisted:false,category:"Other",item_name:"",specification:"",quantity:1,unit:"Nos",unit_price:0,notes:""}])}>＋ Add Item</button></div></div><div className="ccBoqTable"><div className="ccBoqRow ccBoqHeader"><span>Item</span><span>Specification</span><span>Qty</span><span>Unit</span><span>Rate</span><span></span></div>{boqItems.map((x,i)=><div className="ccBoqRow" key={x.id||i}><input value={x.item_name||""} placeholder="Item name" onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,item_name:e.target.value,notes:""}:r))}/><input value={x.specification||""} placeholder="Specification" onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,specification:e.target.value,notes:""}:r))}/><input type="number" min="0" value={x.quantity??0} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,quantity:Number(e.target.value)}:r))}/><input value={x.unit||"Nos"} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,unit:e.target.value}:r))}/><input type="number" min="0" value={x.unit_price??0} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,unit_price:Number(e.target.value)}:r))}/><button className="ccRowDelete" onClick={()=>setBoqItems(boqItems.filter((_,j)=>j!==i))}>Remove</button></div>)}{!boqItems.length&&<div className="ccEmpty">No BOQ items yet. Add an item to start.</div>}</div><div className="ccBoqTotals"><span>Subtotal <b>{money(boqItems.reduce((a,x)=>a+Number(x.quantity||0)*Number(x.unit_price||0),0))}</b></span></div></>}<div className="ccBoqPrintPaper">
   <div className="ccPrintFirstHeader">
     <div className="ccPrintBrand">
       <div><b>{business}</b><small>AI SALES PLATFORM · BOQ / PRE-SALES</small></div>
