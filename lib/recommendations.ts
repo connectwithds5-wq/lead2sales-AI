@@ -57,7 +57,7 @@ export function recommendRequirement(input: string): Recommendation[] {
   const retention = firstNumber(t, [
     /(\d+)\s*(?:day|days)\s*(?:recording|retention|backup)/,
     /(?:recording|retention)\s*(?:for|of)?\s*(\d+)\s*(?:day|days)/,
-  ]) || 30;
+  ]);
 
   if (cameras > 0) {
     // Presales sizing: keep recorder headroom and size PoE by both ports and power.
@@ -79,11 +79,13 @@ export function recommendRequirement(input: string): Recommendation[] {
     const motionFactor = has(t, ["motion recording", "motion only", "event recording", "event only"]) ? 0.4 : 1;
     const planningBitrateMbps = 4;
     const rawStorageTb = (cameras * planningBitrateMbps * 10.8 * retention * motionFactor) / 1000;
-    const storageTb = Math.max(1, Math.ceil(rawStorageTb * 1.2));
+    const storageTb = retention > 0 ? Math.max(1, Math.ceil(rawStorageTb * 1.2)) : 0;
 
     addUnique(out, { category:"CCTV", subcategory:"IP Camera", item_name:"IP Camera", specification:"IP camera, PoE, H.265/H.265+, IR night vision; megapixel/lens/type to be confirmed", quantity:cameras, unit:"Nos", reason:"Exact camera quantity parsed from customer requirement.", required:true });
     addUnique(out, { category:"CCTV", subcategory:"NVR", item_name:nvr+" Channel NVR", specification:nvr+" Channel H.265/H.265+ NVR; minimum "+requiredChannels+" channels required after 20% headroom; confirm incoming bandwidth, decoding and HDD bays against final camera bitrate/resolution", quantity:1, unit:"Nos", reason:"NVR sized from "+cameras+" cameras plus 20% design headroom ("+requiredChannels+" channels required).", required:true, review_required:true });
-    addUnique(out, { category:"Storage", subcategory:"Surveillance HDD", item_name:"Surveillance Storage - "+storageTb+" TB", specification:"Surveillance-grade storage target "+storageTb+" TB including 20% design headroom; planning basis "+planningBitrateMbps+" Mbps/camera, H.265, "+(motionFactor<1?"motion/event recording":"24x7 continuous recording")+", "+retention+" days. Final HDD count/RAID must match NVR supported bays and drive size.", quantity:storageTb, unit:"TB", reason:"Calculated from camera bitrate × camera count × recording time × retention, then 20% design headroom.", required:true, review_required:true });
+    addUnique(out, retention > 0
+      ? { category:"Storage", subcategory:"Surveillance HDD", item_name:"Surveillance Storage - "+storageTb+" TB", specification:"Surveillance-grade storage target "+storageTb+" TB including 20% design headroom; planning basis "+planningBitrateMbps+" Mbps/camera, H.265, "+(motionFactor<1?"motion/event recording":"24x7 continuous recording")+", "+retention+" days. Final HDD count/RAID must match NVR supported bays and drive size.", quantity:storageTb, unit:"TB", reason:"Calculated from camera bitrate × camera count × recording time × retention, then 20% design headroom.", required:true, review_required:true }
+      : { category:"Storage", subcategory:"Surveillance HDD", item_name:"Surveillance Storage - Retention TBD", specification:"Storage cannot be finalized until the customer confirms recording retention days, camera resolution/bitrate, recording mode and NVR/HDD bay architecture.", quantity:1, unit:"Set", reason:"Retention period was not specified; do not invent a storage quantity for quotation.", required:true, review_required:true });
     addUnique(out, { category:"Network", subcategory:"PoE Switch", item_name:cameraPortsPerSwitch+" Port PoE+ Managed Switch", specification:cameraPortsPerSwitch+"-port Gigabit PoE+ managed switch; total PoE budget requirement ≈ "+poeBudgetRequired+" W, so provide "+switchCount+" switch(es) with at least "+poeBudgetPerSwitch+" W PoE budget each; uplinks to CCTV aggregation/core", quantity:switchCount, unit:"Nos", reason:"PoE sized from "+cameras+" cameras at 15 W/camera with 20% power headroom and "+cameraPortsPerSwitch+"-port switch density.", required:true, review_required:true });
     addUnique(out, { category:"Cable", subcategory:"CCTV Cabling", item_name:"CAT6 Cable - CCTV", specification:"CAT6 UTP; planning allowance 60 m per camera; final route length after site survey", quantity:cableMeters, unit:"Meter", reason:"60 m average planning allowance × "+cameras+" cameras.", required:true, review_required:true });
     addUnique(out, { category:"Cable", subcategory:"RJ45 Connector", item_name:"RJ45 CAT6 Connector - CCTV", specification:"RJ45 connectors for both ends of CCTV CAT6 runs", quantity:cameras*2, unit:"Nos", reason:"Two termination ends per camera run.", required:false });
