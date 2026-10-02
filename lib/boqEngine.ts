@@ -5,7 +5,7 @@ type CatalogRow = {
   name:string; specification?:string|null; unit?:string|null; selling_price?:number|null;
   master_product_id?:string|null; active?:boolean;
 };
-const norm=(s:string)=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+const norm=(s?:string|null)=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
 const tokens=(s:string)=>new Set(norm(s).split(" ").filter(x=>x.length>1));
 function findNumber(input:string,patterns:RegExp[],fallback=0){for(const p of patterns){const m=input.match(p);if(m)return Number(m[1]);}return fallback;}
 function cameraBreakdown(input:string){
