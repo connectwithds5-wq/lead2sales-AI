@@ -94,6 +94,12 @@ export default function SalesCommandCenter(){
    const {data:{user}}=await supabase.auth.getUser();
    await supabase.from("lead_activities").insert({id:crypto.randomUUID(),company_id:cid,lead_id:leadId,user_id:user?.id||null,activity_type:type,note:note||null});
  }
+ async function markContacted(lead:Lead){
+   const cid=await resolveCompanyId(); if(!cid)return;
+   const now=new Date().toISOString();
+   const {data,error}=await supabase.from("leads").update({last_contacted_at:now}).eq("id",lead.id).eq("company_id",cid).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source,follow_up_note,last_contacted_at").single();
+   if(!error&&data){setLeads(leads.map(l=>l.id===lead.id?data as Lead:l)); if(selectedLead?.id===lead.id)setSelectedLead(data as Lead); await logLeadActivity(lead.id,"contacted","Customer contact opened from Lead2Sales.");}
+ }
  async function load(){
    setLoading(true); setError("");
    const {data:{user}}=await supabase.auth.getUser();
@@ -403,7 +409,7 @@ export default function SalesCommandCenter(){
            <div className="ccRequirement"><b>{l.lead_category||"Other"}</b><span>{l.requirement||"Requirement not captured yet"}</span></div>
            <span className={"ccStatus "+(l.status||"new")}>{(l.status||"new").replace("_"," ")}</span>
            <strong>{money(Number(l.estimated_value||0))}</strong>
-           <div className="ccActions"><button onClick={()=>void openLeadWorkspace(l)}>Open</button><button onClick={()=>l.phone&&window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button></div>
+           <div className="ccActions"><button onClick={()=>void openLeadWorkspace(l)}>Open</button><button onClick={()=>{if(l.phone){void markContacted(l);window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}}}>WhatsApp</button></div>
          </div>)}{!loading&&!filtered.length&&<div className="ccEmpty">No matching leads.</div>}
        </div>
      </section>
