@@ -8,6 +8,18 @@ type CatalogRow = {
 const norm=(s?:string|null)=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
 const tokens=(s:string)=>new Set(norm(s).split(" ").filter(x=>x.length>1));
 function findNumber(input:string,patterns:RegExp[],fallback=0){for(const p of patterns){const m=input.match(p);if(m)return Number(m[1]);}return fallback;}
+function capacityNumber(s?:string|null){
+ const t=norm(s);
+ const m=t.match(/(\\d+)\\s*(?:channel|ch|port|ports|u)\\b/);
+ return m?Number(m[1]):0;
+}
+function requiredCapacity(item:Recommendation){
+ const s=norm([item.item_name,item.specification,item.subcategory].join(" "));
+ if(norm(item.subcategory)==="nvr") return capacityNumber(item.item_name)||capacityNumber(item.specification);
+ if(norm(item.subcategory)==="poe switch") return capacityNumber(item.item_name)||capacityNumber(item.specification);
+ if(norm(item.subcategory)==="rack") return capacityNumber(item.item_name)||capacityNumber(item.specification);
+ return 0;
+}
 function cameraBreakdown(input:string){
  const t=norm(input);
  const dome=findNumber(t,[/(\d+)\s*(?:dome|dome camera|dome cctv)\b/,/(?:dome|dome camera|dome cctv)\s*(?:x|:|of)?\s*(\d+)\b/]);
@@ -34,6 +46,7 @@ function semanticHints(item:Recommendation){
   cat6:s.includes("cat6"),
   nvr:s.includes("nvr"),
   poe:s.includes("poe"),
+  managed:s.includes("managed"),
   rj45:s.includes("rj45"),
   patch:s.includes("patch"),
   rack:s.includes("rack"),
@@ -44,13 +57,18 @@ function semanticHints(item:Recommendation){
 }
 function enrich(item:Recommendation,master:CatalogRow[],company:CatalogRow[],input:string){
  const brand=preferredBrand(input), hints=semanticHints(item);
- let best:CatalogRow|null=null,bestScore=0;
+ const wantedCapacity=requiredCapacity(item);
+ let best:CatalogRow|null=null,bestScore=-Infinity,bestCapacity=Infinity;
  for(const p of master.filter(x=>x.active!==false)){
   const pCategory=norm(p.category), pSub=norm(p.subcategory), iCategory=norm(item.category), iSub=norm(item.subcategory);
   if(iCategory && pCategory && iCategory!==pCategory) continue;
   if(iSub && pSub && iSub!==pSub && !(iSub.includes(pSub)||pSub.includes(iSub))) continue;
   if(!compatibleUnit(item.unit,p.unit)) continue;
   const hay=norm([p.category,p.subcategory,p.brand,p.model,p.name,p.specification].filter(Boolean).join(" "));
+  const pCapacity=capacityNumber(p.name)||capacityNumber(p.model)||capacityNumber(p.specification);
+  if(wantedCapacity && ["nvr","poe switch","rack"].includes(iSub)){
+    if(!pCapacity || pCapacity<wantedCapacity) continue;
+  }
   let score=30;
   if(iSub && pSub===iSub) score+=35;
   else if(iSub && (iSub.includes(pSub)||pSub.includes(iSub))) score+=15;
@@ -64,12 +82,15 @@ function enrich(item:Recommendation,master:CatalogRow[],company:CatalogRow[],inp
   if(hints.cat6 && hay.includes("cat6")) score+=15;
   if(hints.nvr && hay.includes("nvr")) score+=20;
   if(hints.poe && hay.includes("poe")) score+=15;
+  if(hints.managed && hay.includes("managed")) score+=10;
   if(hints.rj45 && hay.includes("rj45")) score+=20;
   if(hints.patch && hay.includes("patch")) score+=15;
   if(hints.installation && !(hay.includes("installation")||hay.includes("configuration")||hay.includes("laying"))) score-=30;
+  if(wantedCapacity && pCapacity===wantedCapacity) score+=35;
+  else if(wantedCapacity) score-=Math.min(20,pCapacity-wantedCapacity);
   if(p.model&&norm(input).includes(norm(p.model)))score+=100;
   if(p.name&&norm(input).includes(norm(p.name)))score+=80;
-  if(score>bestScore){bestScore=score;best=p;}
+  if(score>bestScore || (score===bestScore && pCapacity>0 && pCapacity<bestCapacity)){bestScore=score;best=p;bestCapacity=pCapacity||bestCapacity;}
  }
  const matched=bestScore>=55?best:null;
  const priced=matched?company.find(p=>p.active!==false&&(p.master_product_id===matched.id||(matched.model&&p.model===matched.model)||(matched.name&&norm(p.name)===norm(matched.name)))):null;
@@ -95,7 +116,6 @@ export function buildEngineeringBoq(input:string,master:CatalogRow[],company:Cat
  }
  if(b.total>0){
   const extra:Recommendation[]=[
-   {category:"Cable",subcategory:"Power Cable",item_name:"3 Core Power Cable - CCTV",specification:"3-core copper power cable for auxiliary CCTV power as required; final route and size to be confirmed",quantity:Math.max(1,b.total*10),unit:"Meter",reason:"Planning allowance of 10 m/camera; revise after site survey.",required:false,review_required:true},
    {category:"Installation",subcategory:"Cable Management",item_name:"PVC Conduit / Flexible Pipe / Cable Protection",specification:"Cable protection for exposed/field runs; final type and route length after site survey",quantity:Math.max(1,b.total*10),unit:"Meter",reason:"Planning allowance of 10 m/camera for protected routing.",required:false,review_required:true},
    {category:"Installation",subcategory:"Accessories",item_name:"CCTV Cable Fasteners / Clips / Screws",specification:"Fasteners and consumables for camera/cable installation",quantity:b.total,unit:"Set",reason:"One installation consumables set per camera.",required:false}
   ];
