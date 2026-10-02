@@ -31,10 +31,8 @@ const SOURCES = [
 const CATEGORIES = ["CCTV","Networking","Access Control","Fire Alarm","Wi-Fi","Server & Storage","Solar","Communication","Other"];
 const STAGES = [
   {key:"new",label:"New",cls:"stageNew"},
-  {key:"contacted",label:"Contacted",cls:"stageContacted"},
-  {key:"qualified",label:"Qualified",cls:"stageQualified"},
-  {key:"proposal",label:"Proposal",cls:"stageProposal"},
-  {key:"negotiation",label:"Negotiation",cls:"stageNegotiation"},
+  {key:"hot",label:"Hot",cls:"stageHot"},
+  {key:"follow_up",label:"Follow-up",cls:"stageFollow"},
   {key:"won",label:"Won",cls:"stageWon"},
   {key:"lost",label:"Lost",cls:"stageLost"},
 ];
