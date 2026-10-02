@@ -5,12 +5,13 @@ import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { recommendRequirement } from "../lib/recommendations";
 import { resolveCatalogProduct } from "../lib/catalogResolver";
+import { buildEngineeringBoq } from "../lib/boqEngine";
 
 
 type Lead = {
   id:string; name:string; company_name:string|null; phone:string|null; email:string|null;
   requirement:string; status:string; estimated_value:number; created_at:string;
-  lead_category:string|null; next_follow_up_at?:string|null; source?:string|null;
+  lead_category:string|null; next_follow_up_at?:string|null; source?:string|null; follow_up_note?:string|null; last_contacted_at?:string|null;
 };
 
 const SOURCES = [
@@ -30,10 +31,8 @@ const SOURCES = [
 const CATEGORIES = ["CCTV","Networking","Access Control","Fire Alarm","Wi-Fi","Server & Storage","Solar","Communication","Other"];
 const STAGES = [
   {key:"new",label:"New",cls:"stageNew"},
-  {key:"contacted",label:"Contacted",cls:"stageContacted"},
-  {key:"qualified",label:"Qualified",cls:"stageQualified"},
-  {key:"proposal",label:"Proposal",cls:"stageProposal"},
-  {key:"negotiation",label:"Negotiation",cls:"stageNegotiation"},
+  {key:"hot",label:"Hot",cls:"stageHot"},
+  {key:"follow_up",label:"Follow-up",cls:"stageFollow"},
   {key:"won",label:"Won",cls:"stageWon"},
   {key:"lost",label:"Lost",cls:"stageLost"},
 ];
@@ -65,21 +64,54 @@ export default function SalesCommandCenter(){
  const [sendChannels,setSendChannels]=useState<("whatsapp"|"email")[]>(["whatsapp","email"]);
  const [sendProceed,setSendProceed]=useState(false);
  const [moduleView,setModuleView]=useState<"quotes"|"boq"|"followups"|null>(null);
+ const [leadActivities,setLeadActivities]=useState<any[]>([]);
+ const [leadWorkspaceQuotes,setLeadWorkspaceQuotes]=useState<any[]>([]);
+ const [leadWorkspaceBoq,setLeadWorkspaceBoq]=useState<any[]>([]);
+ const [workspaceLoading,setWorkspaceLoading]=useState(false);
  const [newLead,setNewLead]=useState({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});
 
+ async function resolveCompanyId(){
+   const {data:{user}}=await supabase.auth.getUser();
+   if(!user)return null;
+   const stored=localStorage.getItem("lead2sales_company_id");
+   if(stored){const {data:member}=await supabase.from("company_members").select("company_id").eq("user_id",user.id).eq("company_id",stored).maybeSingle();if(member)return stored;}
+   const {data:member}=await supabase.from("company_members").select("company_id").eq("user_id",user.id).order("created_at",{ascending:true}).limit(1).maybeSingle();
+   if(member?.company_id)localStorage.setItem("lead2sales_company_id",member.company_id);
+   return member?.company_id||null;
+ }
+ async function openLeadWorkspace(lead:Lead){
+   setSelectedLead(lead); setWorkspaceLoading(true);
+   const cid=await resolveCompanyId(); if(!cid){setWorkspaceLoading(false);return;}
+   const [{data:a},{data:q},{data:b}]=await Promise.all([
+     supabase.from("lead_activities").select("id,activity_type,note,created_at,user_id").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:false}),
+     supabase.from("quotations").select("id,quotation_no,status,subtotal,gst_amount,grand_total,created_at,updated_at").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:false}),
+     supabase.from("lead_boq_items").select("id,item_name,specification,quantity,unit,unit_price,notes,created_at").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true})
+   ]);
+   setLeadActivities(a||[]);setLeadWorkspaceQuotes(q||[]);setLeadWorkspaceBoq(b||[]);setWorkspaceLoading(false);
+ }
+ async function logLeadActivity(leadId:string,type:string,note:string){
+   const cid=await resolveCompanyId(); if(!cid)return;
+   const {data:{user}}=await supabase.auth.getUser();
+   await supabase.from("lead_activities").insert({id:crypto.randomUUID(),company_id:cid,lead_id:leadId,user_id:user?.id||null,activity_type:type,note:note||null});
+ }
+ async function markContacted(lead:Lead){
+   const cid=await resolveCompanyId(); if(!cid)return;
+   const now=new Date().toISOString();
+   const {data,error}=await supabase.from("leads").update({last_contacted_at:now}).eq("id",lead.id).eq("company_id",cid).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source,follow_up_note,last_contacted_at").single();
+   if(!error&&data){setLeads(leads.map(l=>l.id===lead.id?data as Lead:l)); if(selectedLead?.id===lead.id)setSelectedLead(data as Lead); await logLeadActivity(lead.id,"contacted","Customer contact opened from Lead2Sales.");}
+ }
  async function load(){
    setLoading(true); setError("");
    const {data:{user}}=await supabase.auth.getUser();
    if(!user){router.replace("/login");return}
-   const cid=localStorage.getItem("lead2sales_company_id");
+   const cid=await resolveCompanyId();
    if(!cid){router.replace("/onboarding");return}
-   if(!cid){setError("Workspace not found.");setLoading(false);return}
    const [{data:co},{data:leadData,error:leadError},{data:quoteData}]=await Promise.all([
-     supabase.from("companies").select("name").eq("id",cid).maybeSingle(),
-     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").eq("company_id",cid).order("created_at",{ascending:false}),
+     supabase.from("companies").select("name,legal_name").eq("id",cid).maybeSingle(),
+     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source,follow_up_note,last_contacted_at").eq("company_id",cid).order("created_at",{ascending:false}),
      supabase.from("quotations").select("id,quotation_no,status,grand_total,created_at,lead_id").eq("company_id",cid).order("created_at",{ascending:false})
    ]);
-   if(co?.name)setBusiness(co.name);
+   if(co?.name||co?.legal_name)setBusiness(co.name||co.legal_name||"Your Workspace");
    if(leadError)setError(leadError.message); else setLeads((leadData||[]) as Lead[]);
    setQuotes(quoteData||[]);
    setLoading(false);
@@ -105,74 +137,46 @@ export default function SalesCommandCenter(){
    if(!cid||!newLead.name.trim()||!newLead.requirement.trim()){setError("Name and requirement are required.");return}
    setSavingLead(true); setError("");
    const payload={id:crypto.randomUUID(),company_id:cid,name:newLead.name.trim(),company_name:newLead.company_name.trim()||null,phone:newLead.phone.trim()||null,email:newLead.email.trim().toLowerCase()||null,requirement:newLead.requirement.trim(),estimated_value:Number(newLead.estimated_value||0),source:newLead.source,lead_category:newLead.lead_category,status:newLead.status,next_follow_up_at:newLead.next_follow_up_at?new Date(newLead.next_follow_up_at).toISOString():null};
-   const {data,error:insertError}=await supabase.from("leads").insert(payload).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   const {data,error:insertError}=await supabase.from("leads").insert(payload).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source,follow_up_note,last_contacted_at").single();
    if(insertError)setError(insertError.message); else {setLeads([data as Lead,...leads]);setShowNewLead(false);setNewLead({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});}
    setSavingLead(false);
  }
  async function openBoq(lead:Lead){
    setSelectedLead(null); setBoqLead(lead); setBoqLoading(true); setBoqItems([]);
-   const cid=localStorage.getItem("lead2sales_company_id");
+   const cid=await resolveCompanyId();
    if(!cid){setError("Workspace not found.");setBoqLoading(false);return}
-   const {data,error:loadError}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true});
+   const [{data,error:loadError},{data:masterProducts,error:catalogError},{data:companyProducts,error:companyCatalogError}]=await Promise.all([
+     supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true}),
+     supabase.from("master_catalog_products").select("id,category,subcategory,brand,model,name,specification,unit,attributes").eq("active",true),
+     supabase.from("product_catalog").select("id,category,subcategory,brand,model,name,specification,unit,selling_price,master_product_id,active").eq("company_id",cid).eq("active",true)
+   ]);
    if(loadError){setError(loadError.message);setBoqLoading(false);return}
-   const requirement=lead.requirement||"";
-   // Resolve an explicitly named product/model against the shared master catalogue before
-   // falling back to generic engineering rules. Also repair an older saved manual-review row.
-   const {data:masterProducts,error:catalogError}=await supabase
-     .from("master_catalog_products")
-     .select("id,category,subcategory,brand,model,name,specification,unit,attributes")
-     .eq("active",true);
    if(catalogError){setError(catalogError.message);setBoqLoading(false);return}
-   const catalogMatch=resolveCatalogProduct(requirement,masterProducts||[]);
-   const hasOnlyManualReview=Boolean(data?.length) && data!.every((x:any)=>String(x.item_name||"").toLowerCase().startsWith("manual review:"));
-   if(data?.length && !catalogMatch || (data?.length && catalogMatch && !hasOnlyManualReview)){
-     setBoqItems(data.map((x:any)=>({...x,__persisted:true})));setBoqLoading(false);return
+   if(companyCatalogError){setError(companyCatalogError.message);setBoqLoading(false);return}
+   const existing=data||[];
+   const generated=buildEngineeringBoq(lead.requirement||"",masterProducts||[],companyProducts||[]);
+   if(existing.length){
+     const looksManual=existing.every((x:any)=>String(x.item_name||"").toLowerCase().startsWith("manual review:"));
+     if(!looksManual){
+       setBoqItems(existing.map((x:any)=>({...x,__persisted:true}))); setBoqLoading(false); return;
+     }
    }
-   if(catalogMatch){
-     const p=catalogMatch.product;
-     // Master catalogue contains technical data, while commercial pricing belongs
-     // to the company's activated product catalogue.
-     const {data:companyProduct,error:companyProductError}=await supabase
-       .from("product_catalog")
-       .select("selling_price,cost_price,unit")
-       .eq("company_id",cid)
-       .eq("master_product_id",p.id)
-       .eq("active",true)
-       .maybeSingle();
-     if(companyProductError){setError(companyProductError.message);setBoqLoading(false);return}
-     const sellingPrice=Number(companyProduct?.selling_price||0);
-     const priceNote=sellingPrice>0
-       ? "Company catalogue price loaded: "+sellingPrice
-       : "PRICE NOT CONFIGURED: Activate this product in Product Catalogue and enter Selling Price.";
-     setBoqItems([{
-       id:crypto.randomUUID(),
-       company_id:cid,
-       lead_id:lead.id,
-       category:p.category||"Other",
-       subcategory:p.subcategory||"",
-       item_name:p.name,
-       specification:p.specification||("Manufacturer: "+(p.brand||"")+" "+(p.model||"")).trim(),
-       quantity:catalogMatch.quantity,
-       unit:companyProduct?.unit||p.unit||"Nos",
-       unit_price:sellingPrice,
-       notes:"MASTER CATALOGUE MATCH: "+(p.brand||"")+" "+(p.model||p.name)+" · Exact product selected. "+priceNote,
-       master_product_id:p.id,
-       verification:"manufacturer_catalogue_match",
-       __persisted:false
-     }]);
-     setBoqLoading(false);
-     return;
-   }
-
-   const generated=recommendRequirement(requirement).map((x:any)=>{const {reason,review_required,...item}=x;return {id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,...item,unit_price:0,notes:review_required?("MANUAL REVIEW REQUIRED: "+reason):reason,__persisted:false};});
-   setBoqItems(generated); setBoqLoading(false);
+   const rows=generated.map((x:any)=>({
+     id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,category:x.category||"Other",item_name:x.item_name,
+     specification:x.specification||"",quantity:Number(x.quantity)||1,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0,
+     notes:x.notes||x.reason||null,__persisted:false,master_product_id:x.master_product_id
+   }));
+   setBoqItems(rows);
+   await logLeadActivity(lead.id,"boq_generated","Engineering BOQ generated from customer requirement using the master catalogue and company pricing where available. "+rows.length+" line items prepared.");
+   setLeadWorkspaceBoq(rows);
+   setBoqLoading(false);
  }
  async function sendToClient(){
    if(!boqLead)return;
    const missingWhatsapp=sendChannels.includes("whatsapp")&&!String(boqLead.phone||"").trim();
    const missingEmail=sendChannels.includes("email")&&!String(boqLead.email||"").trim();
    if((missingWhatsapp||missingEmail)&&!sendProceed)return;
-   const cid=localStorage.getItem("lead2sales_company_id");
+   const cid=await resolveCompanyId();
    if(!cid){setError("Workspace not found.");return}
    const available=sendChannels.filter(ch=>ch==="whatsapp"?!!String(boqLead.phone||"").trim():!!String(boqLead.email||"").trim());
    if(!available.length){setError("No available customer contact channel to send.");return}
@@ -307,12 +311,12 @@ export default function SalesCommandCenter(){
        const emailData=await emailRes.json().catch(()=>({}));
        if(!emailRes.ok)throw new Error(emailData.error||"Could not send quotation email.");
      }
-     setSendClientOpen(false);setSendProceed(false);alert("Quotation "+quoteNumber+" prepared and sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+".");
+     setSendClientOpen(false);setSendProceed(false); await logLeadActivity(boqLead.id,"quotation_sent","Quotation "+quoteNumber+" sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+" for "+money(total)+"."); await openLeadWorkspace(boqLead); alert("Quotation "+quoteNumber+" prepared and sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+".");
    }catch(e:any){console.error("Send quotation failed:",e);setError(e?.message||"Could not prepare/send quotation.");}
  }
 
  async function saveBoq(){
-   if(!boqLead)return; const cid=localStorage.getItem("lead2sales_company_id"); if(!cid)return;
+   if(!boqLead)return; const cid=await resolveCompanyId(); if(!cid)return;
    setBoqSaving(true);
    const {data:existing,error:existingError}=await supabase.from("lead_boq_items").select("id").eq("company_id",cid).eq("lead_id",boqLead.id);
    if(existingError){setError(existingError.message);setBoqSaving(false);return}
@@ -323,13 +327,13 @@ export default function SalesCommandCenter(){
    const fresh=boqItems.filter(x=>!x.__persisted&&String(x.item_name||"").trim()).map(x=>({id:x.id||crypto.randomUUID(),company_id:cid,lead_id:boqLead.id,category:x.category||"Other",item_name:x.item_name,specification:x.specification||"",quantity:Number(x.quantity)||0,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0,notes:x.notes||null}));
    if(fresh.length){const {error}=await supabase.from("lead_boq_items").insert(fresh);if(error){setError(error.message);setBoqSaving(false);return}}
    const {data:latest}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",boqLead.id).order("created_at",{ascending:true});
-   setBoqItems((latest||[]).map((x:any)=>({...x,__persisted:true}))); setBoqSaving(false);
+   setBoqItems((latest||[]).map((x:any)=>({...x,__persisted:true}))); setLeadWorkspaceBoq(latest||[]); await logLeadActivity(boqLead.id,"boq_saved","BOQ changes saved by sales/engineering."); setBoqSaving(false);
  }
  async function updateLead(patch:Partial<Lead>){
    if(!selectedLead)return;
-   const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",localStorage.getItem("lead2sales_company_id")||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",(await resolveCompanyId())||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
    if(updateError){setError(updateError.message);return}
-   setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead);
+   setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead); await logLeadActivity(selectedLead.id,"lead_updated","Lead details updated.");
  }
 
  return <div className="ccAppShell">
@@ -405,7 +409,7 @@ export default function SalesCommandCenter(){
            <div className="ccRequirement"><b>{l.lead_category||"Other"}</b><span>{l.requirement||"Requirement not captured yet"}</span></div>
            <span className={"ccStatus "+(l.status||"new")}>{(l.status||"new").replace("_"," ")}</span>
            <strong>{money(Number(l.estimated_value||0))}</strong>
-           <div className="ccActions"><button onClick={()=>setSelectedLead(l)}>Open</button><button onClick={()=>l.phone&&window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button></div>
+           <div className="ccActions"><button onClick={()=>void openLeadWorkspace(l)}>Open</button><button onClick={()=>{if(l.phone){void markContacted(l);window.open("https://wa.me/"+l.phone.replace(/\D/g,""),"_blank")}}}>WhatsApp</button></div>
          </div>)}{!loading&&!filtered.length&&<div className="ccEmpty">No matching leads.</div>}
        </div>
      </section>
@@ -413,7 +417,7 @@ export default function SalesCommandCenter(){
      <aside className="ccPanel ccActionPanel">
        <div className="ccSectionHead compact"><div><span className="ccEyebrow">TODAY</span><h2>Next actions</h2></div></div>
        <div className="ccActionCard ccActionHot"><span>🔥</span><div><b>Hot leads</b><small>{leads.filter(l=>l.status==="hot").length} need attention</small></div><strong>→</strong></div>
-       <button className="ccActionCard ccActionFollow" onClick={()=>setSelectedLead(followups[0]||null)}><span>⏰</span><div><b>Follow-ups due</b><small>{followups.length} need action</small></div><strong>→</strong></button>
+       <button className="ccActionCard ccActionFollow" onClick={()=>{if(followups[0])void openLeadWorkspace(followups[0])}}><span>⏰</span><div><b>Follow-ups due</b><small>{followups.length} need action</small></div><strong>→</strong></button>
        <button className="ccActionCard ccActionQuote" onClick={()=>router.push("/?quotationHistory=1")}><span>🧾</span><div><b>Quotation queue</b><small>{quotes.filter(q=>["draft","sent"].includes(q.status)).length} open quotes</small></div><strong>→</strong></button>
        <div className="ccActionCard ccActionInbox"><span>📥</span><div><b>Unprocessed inbound</b><small>Email / API / future channels</small></div><strong>→</strong></div>
        <div className="ccMiniFlow"><b>Recommended operating rule</b><span>Every new lead must end this cycle with an owner, stage, next action and follow-up date.</span></div>
@@ -430,7 +434,40 @@ export default function SalesCommandCenter(){
      {moduleView==="followups"&&<div className="ccLeadList">{followups.length===0?<div className="ccEmpty">No due or overdue follow-ups.</div>:followups.map(l=><div className="ccLeadRow" key={l.id}><div className="ccLeadIdentity"><b>{l.name}</b><small>{l.next_follow_up_at?new Date(l.next_follow_up_at).toLocaleString("en-IN"):"Follow-up"} · {l.requirement}</small></div><button className="ccPrimary" onClick={()=>{setModuleView(null);setSelectedLead(l)}}>Open Lead</button></div>)}</div>}
    </div></div>}
    {showNewLead&&<div className="ccModalBackdrop" onClick={()=>setShowNewLead(false)}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">CAPTURE · NEW LEAD</span><h2>Add enquiry</h2><p>This writes directly to the live lead pipeline.</p></div><button onClick={()=>setShowNewLead(false)}>×</button></div><div className="ccFormGrid"><input placeholder="Customer name *" value={newLead.name} onChange={e=>setNewLead({...newLead,name:e.target.value})}/><input placeholder="Company / site" value={newLead.company_name} onChange={e=>setNewLead({...newLead,company_name:e.target.value})}/><input placeholder="Phone" value={newLead.phone} onChange={e=>setNewLead({...newLead,phone:e.target.value})}/><input placeholder="Email" type="email" value={newLead.email} onChange={e=>setNewLead({...newLead,email:e.target.value})}/><select value={newLead.source} onChange={e=>setNewLead({...newLead,source:e.target.value})}>{SOURCES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select><select value={newLead.lead_category} onChange={e=>setNewLead({...newLead,lead_category:e.target.value})}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select><select value={newLead.status} onChange={e=>setNewLead({...newLead,status:e.target.value})}>{STAGES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select><input type="number" placeholder="Estimated value ₹" value={newLead.estimated_value} onChange={e=>setNewLead({...newLead,estimated_value:e.target.value})}/><input type="datetime-local" value={newLead.next_follow_up_at} onChange={e=>setNewLead({...newLead,next_follow_up_at:e.target.value})}/><textarea className="ccFullField" placeholder="Customer requirement *" value={newLead.requirement} onChange={e=>setNewLead({...newLead,requirement:e.target.value})}/></div><div className="ccModalActions"><button className="ccGhost" onClick={()=>setShowNewLead(false)}>Cancel</button><button className="ccPrimary" disabled={savingLead} onClick={createLead}>{savingLead?"Saving…":"Save Lead"}</button></div></div></div>}
-   {selectedLead&&<div className="ccModalBackdrop" onClick={()=>setSelectedLead(null)}><div className="ccModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">LEAD WORKSPACE</span><h2>{selectedLead.name}</h2><p>{selectedLead.company_name||"Individual customer"} · {sourceLabel(selectedLead.source)}</p></div><button onClick={()=>setSelectedLead(null)}>×</button></div><div className="ccDetailGrid"><div><b>Requirement</b><p>{selectedLead.requirement||"Not captured"}</p></div><div><b>Contact</b><p>{selectedLead.phone||"—"}<br/>{selectedLead.email||"—"}</p></div><label>Stage<select value={selectedLead.status} onChange={e=>updateLead({status:e.target.value})}>{STAGES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label><label>Category<select value={selectedLead.lead_category||"Other"} onChange={e=>updateLead({lead_category:e.target.value})}>{CATEGORIES.map(x=><option key={x}>{x}</option>)}</select></label><label>Estimated value<input type="number" value={selectedLead.estimated_value||0} onChange={e=>updateLead({estimated_value:Number(e.target.value)})}/></label><label>Next follow-up<input type="datetime-local" value={selectedLead.next_follow_up_at?new Date(selectedLead.next_follow_up_at).toISOString().slice(0,16):""} onChange={e=>updateLead({next_follow_up_at:e.target.value?new Date(e.target.value).toISOString():null})}/></label></div><div className="ccModalActions"><button className="ccGhost" onClick={()=>selectedLead.phone&&window.open("https://wa.me/"+selectedLead.phone.replace(/\\D/g,""),"_blank")}>WhatsApp</button><button className="ccGhost" onClick={()=>openBoq(selectedLead)}>📋 BOQ</button><button className="ccPrimary" onClick={()=>openBoq(selectedLead)}>Open BOQ Workspace</button></div></div></div>}
+   {selectedLead&&<div className="ccModalBackdrop" onClick={()=>setSelectedLead(null)}><div className="ccModal ccLeadWorkspaceModal" onClick={e=>e.stopPropagation()}>
+     <div className="ccModalHead"><div><span className="ccEyebrow">LEAD WORKSPACE · COMPLETE JOURNEY</span><h2>{selectedLead.name}</h2><p>{selectedLead.company_name||"Individual customer"} · {sourceLabel(selectedLead.source)} · Created {new Date(selectedLead.created_at).toLocaleString("en-IN")}</p></div><button onClick={()=>setSelectedLead(null)}>×</button></div>
+     <div className="ccStageJourney">
+       {[
+         {key:"captured",label:"Lead Captured",icon:"01",done:true},
+         {key:"boq",label:"BOQ Generated",icon:"02",done:leadWorkspaceBoq.length>0},
+         {key:"quote",label:"Quotation",icon:"03",done:leadWorkspaceQuotes.length>0},
+         {key:"follow",label:"Follow-up",icon:"04",done:!!selectedLead.next_follow_up_at||selectedLead.status==="follow_up"},
+         {key:"close",label:selectedLead.status==="lost"?"Lost":"Won",icon:"05",done:selectedLead.status==="won"||selectedLead.status==="lost"}
+       ].map((stage:any)=><div key={stage.key} className={"ccJourneyStage "+(stage.done?"done":"pending")}><span>{stage.icon}</span><b>{stage.label}</b><small>{stage.done?"Completed / reached":"Pending"}</small></div>)}
+     </div>
+     <div className="ccWorkspaceGrid">
+       <div className="ccWorkspaceCard ccWorkspaceMain">
+         <div className="ccWorkspaceCardHead"><div><b>Customer & Requirement</b><small>Everything sales needs before the next action.</small></div><span className={"ccStatus "+(selectedLead.status||"new")}>{(selectedLead.status||"new").replace("_"," ")}</span></div>
+         <div className="ccWorkspaceFacts"><div><span>Customer</span><b>{selectedLead.name}</b></div><div><span>Company / Site</span><b>{selectedLead.company_name||"—"}</b></div><div><span>Phone</span><b>{selectedLead.phone||"—"}</b></div><div><span>Email</span><b>{selectedLead.email||"—"}</b></div><div className="full"><span>Requirement</span><b>{selectedLead.requirement||"Not captured"}</b></div></div>
+         <div className="ccDetailGrid">
+           <label>Stage<select value={selectedLead.status} onChange={e=>updateLead({status:e.target.value})}>{[{key:"new",label:"New"},{key:"hot",label:"Hot"},{key:"follow_up",label:"Follow-up"},{key:"won",label:"Won"},{key:"lost",label:"Lost"}].map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label>
+           <label>Category<select value={selectedLead.lead_category||"Other"} onChange={e=>updateLead({lead_category:e.target.value})}>{CATEGORIES.map(x=><option key={x}>{x}</option>)}</select></label>
+           <label>Estimated value<input type="number" value={selectedLead.estimated_value||0} onChange={e=>updateLead({estimated_value:Number(e.target.value)})}/></label>
+           <label>Next follow-up<input type="datetime-local" value={selectedLead.next_follow_up_at?new Date(selectedLead.next_follow_up_at).toISOString().slice(0,16):""} onChange={e=>updateLead({next_follow_up_at:e.target.value?new Date(e.target.value).toISOString():null})}/></label>
+         </div>
+         <div className="ccWorkspaceActions"><button className="ccGhost" onClick={()=>selectedLead.phone&&window.open("https://wa.me/"+selectedLead.phone.replace(/\D/g,""),"_blank")}>WhatsApp</button><button className="ccGhost" onClick={()=>openBoq(selectedLead)}>📋 Open / Generate BOQ</button><button className="ccPrimary" onClick={()=>openBoq(selectedLead)}>BOQ Workspace →</button></div>
+       </div>
+       <div className="ccWorkspaceCard"><div className="ccWorkspaceCardHead"><div><b>BOQ & Quotation Status</b><small>Commercial progress for this lead.</small></div></div>
+         {workspaceLoading?<div className="ccEmpty">Loading workspace history…</div>:<><div className="ccProgressLine"><span>BOQ items <b>{leadWorkspaceBoq.length}</b></span><span>Quotes <b>{leadWorkspaceQuotes.length}</b></span></div>
+         <div className="ccQuoteMini">{leadWorkspaceQuotes.length?leadWorkspaceQuotes.map((q:any)=><div key={q.id}><b>{q.quotation_no}</b><span>{q.status} · {money(Number(q.grand_total||0))}</span><small>{new Date(q.created_at).toLocaleString("en-IN")}</small></div>):<div className="ccEmpty">No quotation created yet.</div>}</div></>}
+       </div>
+     </div>
+     <div className="ccWorkspaceCard"><div className="ccWorkspaceCardHead"><div><b>Follow-up & Conversation History</b><small>Last contact, follow-up notes and every recorded activity.</small></div></div>
+       <div className="ccWorkspaceFacts"><div><span>Last contacted</span><b>{selectedLead.last_contacted_at?new Date(selectedLead.last_contacted_at).toLocaleString("en-IN"):"Not recorded"}</b></div><div><span>Next follow-up</span><b>{selectedLead.next_follow_up_at?new Date(selectedLead.next_follow_up_at).toLocaleString("en-IN"):"Not scheduled"}</b></div><div className="full"><span>Follow-up note</span><textarea className="ccFollowNote" defaultValue={selectedLead.follow_up_note||""} placeholder="What was discussed? Customer response, next commitment, pending item..." onBlur={e=>updateLead({follow_up_note:e.currentTarget.value.trim()||null})}/></div></div>
+       <div className="ccTimeline">{leadActivities.length?leadActivities.map((a:any)=><div className="ccTimelineItem" key={a.id}><span></span><div><b>{String(a.activity_type||"activity").replace(/_/g," ")}</b><small>{new Date(a.created_at).toLocaleString("en-IN")}</small><p>{a.note||"No additional note."}</p></div></div>):<div className="ccEmpty">No conversation/activity records yet.</div>}</div>
+     </div>
+     <div className="ccModalActions"><button className="ccGhost" onClick={()=>setSelectedLead(null)}>Close</button><button className="ccPrimary" onClick={()=>{setSelectedLead(null);openBoq(selectedLead)}}>Continue to BOQ →</button></div>
+   </div></div>}
    {boqLead&&<div className="ccModalBackdrop" onClick={()=>!boqSaving&&setBoqLead(null)}><div className="ccModal ccBoqModal" onClick={e=>e.stopPropagation()}><div className="ccModalHead"><div><span className="ccEyebrow">QUOTE · BOQ WORKSPACE</span><h2>{boqLead.name}</h2><p>{boqLead.company_name||"Individual customer"} · {boqLead.lead_category||"Other"}</p></div><button onClick={()=>!boqSaving&&setBoqLead(null)}>×</button></div><div className="ccBoqSummary"><div><span>Requirement</span><b>{boqLead.requirement||"—"}</b></div><div><span>Estimated Value</span><b>{money(Number(boqLead.estimated_value||0))}</b></div><div><span>Items</span><b>{boqItems.length}</b></div></div>{boqLoading?<div className="ccEmpty">Building BOQ…</div>:<><div className="ccBoqHead"><div><b>Bill of Quantities</b><small>Edit quantity, specification and rate before quotation.</small></div><button className="ccGhost" onClick={()=>setBoqItems([...boqItems,{id:crypto.randomUUID(),__persisted:false,category:"Other",item_name:"",specification:"",quantity:1,unit:"Nos",unit_price:0,notes:""}])}>＋ Add Item</button></div><div className="ccBoqTable"><div className="ccBoqRow ccBoqHeader"><span>Item</span><span>Specification</span><span>Qty</span><span>Unit</span><span>Rate</span><span></span></div>{boqItems.map((x,i)=><div className="ccBoqRow" key={x.id||i}><input value={x.item_name||""} placeholder="Item name" onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,item_name:e.target.value,notes:""}:r))}/><input value={x.specification||""} placeholder="Specification" onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,specification:e.target.value,notes:""}:r))}/><input type="number" min="0" value={x.quantity??0} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,quantity:Number(e.target.value)}:r))}/><input value={x.unit||"Nos"} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,unit:e.target.value}:r))}/><input type="number" min="0" value={x.unit_price??0} onChange={e=>setBoqItems(boqItems.map((r,j)=>j===i?{...r,unit_price:Number(e.target.value)}:r))}/><button className="ccRowDelete" onClick={()=>setBoqItems(boqItems.filter((_,j)=>j!==i))}>Remove</button></div>)}{!boqItems.length&&<div className="ccEmpty">No BOQ items yet. Add an item to start.</div>}</div><div className="ccBoqTotals"><span>Subtotal <b>{money(boqItems.reduce((a,x)=>a+Number(x.quantity||0)*Number(x.unit_price||0),0))}</b></span></div></>}<div className="ccBoqPrintPaper">
   <div className="ccPrintFirstHeader">
     <div className="ccPrintBrand">
