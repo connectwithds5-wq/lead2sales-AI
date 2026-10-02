@@ -13,11 +13,18 @@ function capacityNumber(s?:string|null){
  const m=t.match(/(\\d+)\\s*(?:channel|ch|port|ports|u)\\b/);
  return m?Number(m[1]):0;
 }
-function requiredCapacity(item:Recommendation){
- const s=norm([item.item_name,item.specification,item.subcategory].join(" "));
- if(norm(item.subcategory)==="nvr") return capacityNumber(item.item_name)||capacityNumber(item.specification);
- if(norm(item.subcategory)==="poe switch") return capacityNumber(item.item_name)||capacityNumber(item.specification);
- if(norm(item.subcategory)==="rack") return capacityNumber(item.item_name)||capacityNumber(item.specification);
+function requiredCapacity(item:Recommendation,input:string){
+ const sub=norm(item.subcategory);
+ const t=norm(input);
+ if(sub==="nvr"){
+  const cams=findNumber(t,[/(\\d+)\\s*(?:cctv|cameras?|cams?)\\b/,(?:cctv|cameras?|cams?)\\s*(?:of|x|:)?\\s*(\\d+)\\b/]);
+  if(cams>0) return Math.ceil(cams*1.2);
+ }
+ if(sub==="poe switch"){
+  const cams=findNumber(t,[/(\\d+)\\s*(?:cctv|cameras?|cams?)\\b/,(?:cctv|cameras?|cams?)\\s*(?:of|x|:)?\\s*(\\d+)\\b/]);
+  if(cams>0) return cams<=8?8:cams<=16?16:cams<=24?24:48;
+ }
+ if(sub==="rack") return capacityNumber(item.specification)||capacityNumber(item.item_name);
  return 0;
 }
 function cameraBreakdown(input:string){
@@ -35,7 +42,7 @@ function preferredBrand(input:string){
 function compatibleUnit(a:string,b?:string|null){
  const x=norm(a),y=norm(b);
  if(!y||x===y)return true;
- const groups=[["nos","no","pcs","piece","pieces","camera"],["meter","m","metre","meter"],["job"],["set"],["box"],["tb","terabyte","terabytes"],["point","points"]];
+ const groups=[["nos","no","pcs","piece","pieces"],["meter","m","metre","meter"],["job"],["set"],["box"],["tb","terabyte","terabytes"],["point","points"]];
  return groups.some(g=>g.includes(x)&&g.includes(y));
 }
 function semanticHints(item:Recommendation){
@@ -57,7 +64,7 @@ function semanticHints(item:Recommendation){
 }
 function enrich(item:Recommendation,master:CatalogRow[],company:CatalogRow[],input:string){
  const brand=preferredBrand(input), hints=semanticHints(item);
- const wantedCapacity=requiredCapacity(item);
+ const wantedCapacity=requiredCapacity(item,input);
  let best:CatalogRow|null=null,bestScore=-Infinity,bestCapacity=Infinity;
  for(const p of master.filter(x=>x.active!==false)){
   const pCategory=norm(p.category), pSub=norm(p.subcategory), iCategory=norm(item.category), iSub=norm(item.subcategory);
