@@ -312,7 +312,7 @@ export default function SalesCommandCenter(){
  }
 
  async function saveBoq(){
-   if(!boqLead)return; const cid=localStorage.getItem("lead2sales_company_id"); if(!cid)return;
+   if(!boqLead)return; const cid=await resolveCompanyId(); if(!cid)return;
    setBoqSaving(true);
    const {data:existing,error:existingError}=await supabase.from("lead_boq_items").select("id").eq("company_id",cid).eq("lead_id",boqLead.id);
    if(existingError){setError(existingError.message);setBoqSaving(false);return}
@@ -327,7 +327,7 @@ export default function SalesCommandCenter(){
  }
  async function updateLead(patch:Partial<Lead>){
    if(!selectedLead)return;
-   const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",localStorage.getItem("lead2sales_company_id")||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",(await resolveCompanyId())||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
    if(updateError){setError(updateError.message);return}
    setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead); await logLeadActivity(selectedLead.id,"lead_updated","Lead details updated.");
  }
