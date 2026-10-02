@@ -16,12 +16,13 @@ function capacityNumber(s?:string|null){
 function requiredCapacity(item:Recommendation,input:string){
  const sub=norm(item.subcategory);
  const t=norm(input);
+ const cameraPatterns=[/(\d+)\s*(?:cctv|cameras?|cams?)\b/,(?:cctv|cameras?|cams?)\s*(?:of|x|:)?\s*(\d+)\b/];
  if(sub==="nvr"){
-  const cams=findNumber(t,[/(\d+)\s*(?:cctv|cameras?|cams?)\b/,(?:cctv|cameras?|cams?)\\s*(?:of|x|:)?\\s*(\\d+)\\b/]);
+  const cams=findNumber(t,cameraPatterns);
   if(cams>0) return Math.ceil(cams*1.2);
  }
  if(sub==="poe switch"){
-  const cams=findNumber(t,[/(\\d+)\\s*(?:cctv|cameras?|cams?)\\b/,(?:cctv|cameras?|cams?)\\s*(?:of|x|:)?\\s*(\\d+)\\b/]);
+  const cams=findNumber(t,cameraPatterns);
   if(cams>0) return cams<=8?8:cams<=16?16:cams<=24?24:48;
  }
  if(sub==="rack") return capacityNumber(item.specification)||capacityNumber(item.item_name);
