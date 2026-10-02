@@ -172,7 +172,7 @@ export default function SalesCommandCenter(){
    const missingWhatsapp=sendChannels.includes("whatsapp")&&!String(boqLead.phone||"").trim();
    const missingEmail=sendChannels.includes("email")&&!String(boqLead.email||"").trim();
    if((missingWhatsapp||missingEmail)&&!sendProceed)return;
-   const cid=localStorage.getItem("lead2sales_company_id");
+   const cid=await resolveCompanyId();
    if(!cid){setError("Workspace not found.");return}
    const available=sendChannels.filter(ch=>ch==="whatsapp"?!!String(boqLead.phone||"").trim():!!String(boqLead.email||"").trim());
    if(!available.length){setError("No available customer contact channel to send.");return}
@@ -307,7 +307,7 @@ export default function SalesCommandCenter(){
        const emailData=await emailRes.json().catch(()=>({}));
        if(!emailRes.ok)throw new Error(emailData.error||"Could not send quotation email.");
      }
-     setSendClientOpen(false);setSendProceed(false);alert("Quotation "+quoteNumber+" prepared and sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+".");
+     setSendClientOpen(false);setSendProceed(false); await logLeadActivity(boqLead.id,"quotation_sent","Quotation "+quoteNumber+" sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+" for "+money(total)+"."); await openLeadWorkspace(boqLead); alert("Quotation "+quoteNumber+" prepared and sent via "+available.map(x=>x==="whatsapp"?"WhatsApp":"Email").join(" + ")+".");
    }catch(e:any){console.error("Send quotation failed:",e);setError(e?.message||"Could not prepare/send quotation.");}
  }
 
@@ -323,13 +323,13 @@ export default function SalesCommandCenter(){
    const fresh=boqItems.filter(x=>!x.__persisted&&String(x.item_name||"").trim()).map(x=>({id:x.id||crypto.randomUUID(),company_id:cid,lead_id:boqLead.id,category:x.category||"Other",item_name:x.item_name,specification:x.specification||"",quantity:Number(x.quantity)||0,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0,notes:x.notes||null}));
    if(fresh.length){const {error}=await supabase.from("lead_boq_items").insert(fresh);if(error){setError(error.message);setBoqSaving(false);return}}
    const {data:latest}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",boqLead.id).order("created_at",{ascending:true});
-   setBoqItems((latest||[]).map((x:any)=>({...x,__persisted:true}))); setBoqSaving(false);
+   setBoqItems((latest||[]).map((x:any)=>({...x,__persisted:true}))); setLeadWorkspaceBoq(latest||[]); await logLeadActivity(boqLead.id,"boq_saved","BOQ changes saved by sales/engineering."); setBoqSaving(false);
  }
  async function updateLead(patch:Partial<Lead>){
    if(!selectedLead)return;
    const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",localStorage.getItem("lead2sales_company_id")||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
    if(updateError){setError(updateError.message);return}
-   setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead);
+   setLeads(leads.map(l=>l.id===selectedLead.id?data as Lead:l));setSelectedLead(data as Lead); await logLeadActivity(selectedLead.id,"lead_updated","Lead details updated.");
  }
 
  return <div className="ccAppShell">
