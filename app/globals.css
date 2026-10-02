@@ -476,3 +476,5 @@
 .ccQuoteMini{display:grid;gap:7px;margin-top:10px}.ccQuoteMini>div{border:1px solid #edf0f4;border-radius:9px;padding:9px;display:grid;gap:3px}.ccQuoteMini b{font-size:10px}.ccQuoteMini span,.ccQuoteMini small{font-size:9px;color:#738094}
 .ccTimeline{margin-top:10px}.ccTimelineItem{display:grid;grid-template-columns:12px 1fr;gap:10px;padding:10px 0;border-top:1px solid #edf0f4}.ccTimelineItem>span{width:8px;height:8px;border-radius:50%;background:#5b5ce2;margin-top:4px}.ccTimelineItem div{display:grid;gap:3px}.ccTimelineItem b{font-size:10px;text-transform:capitalize}.ccTimelineItem small{font-size:8px;color:#8a95a5}.ccTimelineItem p{margin:2px 0 0;font-size:9px;line-height:1.5;color:#596578}
 @media(max-width:800px){.ccStageJourney{grid-template-columns:1fr 1fr}.ccWorkspaceGrid{grid-template-columns:1fr}.ccWorkspaceFacts{grid-template-columns:1fr}.ccWorkspaceFacts .full{grid-column:auto}.ccJourneyStage:last-child{grid-column:1/-1}}
+
+.ccFollowNote{width:100%;min-height:72px;margin-top:4px;padding:9px;border:1px solid #dfe4eb;border-radius:9px;background:#fff;color:#273142;resize:vertical;font-size:10px}
