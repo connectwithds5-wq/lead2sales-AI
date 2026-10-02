@@ -2,7 +2,7 @@ name: Build Check
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/engineering-boq-lead-workspace]
   workflow_dispatch:
 
 jobs:
