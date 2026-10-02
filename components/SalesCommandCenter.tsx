@@ -139,61 +139,33 @@ export default function SalesCommandCenter(){
  }
  async function openBoq(lead:Lead){
    setSelectedLead(null); setBoqLead(lead); setBoqLoading(true); setBoqItems([]);
-   const cid=localStorage.getItem("lead2sales_company_id");
+   const cid=await resolveCompanyId();
    if(!cid){setError("Workspace not found.");setBoqLoading(false);return}
-   const {data,error:loadError}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true});
+   const [{data,error:loadError},{data:masterProducts,error:catalogError},{data:companyProducts,error:companyCatalogError}]=await Promise.all([
+     supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true}),
+     supabase.from("master_catalog_products").select("id,category,subcategory,brand,model,name,specification,unit,attributes").eq("active",true),
+     supabase.from("product_catalog").select("id,category,subcategory,brand,model,name,specification,unit,selling_price,master_product_id,active").eq("company_id",cid).eq("active",true)
+   ]);
    if(loadError){setError(loadError.message);setBoqLoading(false);return}
-   const requirement=lead.requirement||"";
-   // Resolve an explicitly named product/model against the shared master catalogue before
-   // falling back to generic engineering rules. Also repair an older saved manual-review row.
-   const {data:masterProducts,error:catalogError}=await supabase
-     .from("master_catalog_products")
-     .select("id,category,subcategory,brand,model,name,specification,unit,attributes")
-     .eq("active",true);
    if(catalogError){setError(catalogError.message);setBoqLoading(false);return}
-   const catalogMatch=resolveCatalogProduct(requirement,masterProducts||[]);
-   const hasOnlyManualReview=Boolean(data?.length) && data!.every((x:any)=>String(x.item_name||"").toLowerCase().startsWith("manual review:"));
-   if(data?.length && !catalogMatch || (data?.length && catalogMatch && !hasOnlyManualReview)){
-     setBoqItems(data.map((x:any)=>({...x,__persisted:true})));setBoqLoading(false);return
+   if(companyCatalogError){setError(companyCatalogError.message);setBoqLoading(false);return}
+   const existing=data||[];
+   const generated=buildEngineeringBoq(lead.requirement||"",masterProducts||[],companyProducts||[]);
+   if(existing.length){
+     const looksManual=existing.every((x:any)=>String(x.item_name||"").toLowerCase().startsWith("manual review:"));
+     if(!looksManual){
+       setBoqItems(existing.map((x:any)=>({...x,__persisted:true}))); setBoqLoading(false); return;
+     }
    }
-   if(catalogMatch){
-     const p=catalogMatch.product;
-     // Master catalogue contains technical data, while commercial pricing belongs
-     // to the company's activated product catalogue.
-     const {data:companyProduct,error:companyProductError}=await supabase
-       .from("product_catalog")
-       .select("selling_price,cost_price,unit")
-       .eq("company_id",cid)
-       .eq("master_product_id",p.id)
-       .eq("active",true)
-       .maybeSingle();
-     if(companyProductError){setError(companyProductError.message);setBoqLoading(false);return}
-     const sellingPrice=Number(companyProduct?.selling_price||0);
-     const priceNote=sellingPrice>0
-       ? "Company catalogue price loaded: "+sellingPrice
-       : "PRICE NOT CONFIGURED: Activate this product in Product Catalogue and enter Selling Price.";
-     setBoqItems([{
-       id:crypto.randomUUID(),
-       company_id:cid,
-       lead_id:lead.id,
-       category:p.category||"Other",
-       subcategory:p.subcategory||"",
-       item_name:p.name,
-       specification:p.specification||("Manufacturer: "+(p.brand||"")+" "+(p.model||"")).trim(),
-       quantity:catalogMatch.quantity,
-       unit:companyProduct?.unit||p.unit||"Nos",
-       unit_price:sellingPrice,
-       notes:"MASTER CATALOGUE MATCH: "+(p.brand||"")+" "+(p.model||p.name)+" · Exact product selected. "+priceNote,
-       master_product_id:p.id,
-       verification:"manufacturer_catalogue_match",
-       __persisted:false
-     }]);
-     setBoqLoading(false);
-     return;
-   }
-
-   const generated=recommendRequirement(requirement).map((x:any)=>{const {reason,review_required,...item}=x;return {id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,...item,unit_price:0,notes:review_required?("MANUAL REVIEW REQUIRED: "+reason):reason,__persisted:false};});
-   setBoqItems(generated); setBoqLoading(false);
+   const rows=generated.map((x:any)=>({
+     id:crypto.randomUUID(),company_id:cid,lead_id:lead.id,category:x.category||"Other",item_name:x.item_name,
+     specification:x.specification||"",quantity:Number(x.quantity)||1,unit:x.unit||"Nos",unit_price:Number(x.unit_price)||0,
+     notes:x.notes||x.reason||null,__persisted:false,master_product_id:x.master_product_id
+   }));
+   setBoqItems(rows);
+   await logLeadActivity(lead.id,"boq_generated","Engineering BOQ generated from customer requirement using the master catalogue and company pricing where available. "+rows.length+" line items prepared.");
+   setLeadWorkspaceBoq(rows);
+   setBoqLoading(false);
  }
  async function sendToClient(){
    if(!boqLead)return;
