@@ -16,7 +16,7 @@ function capacityNumber(s?:string|null){
 function requiredCapacity(item:Recommendation,input:string){
  const sub=norm(item.subcategory);
  const t=norm(input);
- const cameraPatterns=[/(\d+)\s*(?:cctv|cameras?|cams?)\b/,(?:cctv|cameras?|cams?)\s*(?:of|x|:)?\s*(\d+)\b/];
+ const cameraPatterns=[/(\d+)\s*(?:cctv|cameras?|cams?)\b/ ,/(?:cctv|cameras?|cams?)\s*(?:of|x|:)?\s*(\d+)\b/];
  if(sub==="nvr"){
   const cams=findNumber(t,cameraPatterns);
   if(cams>0) return Math.ceil(cams*1.2);
