@@ -20,30 +20,70 @@ function preferredBrand(input:string){
  for(const b of ["hikvision","cp plus","dahua","prama","axis","bosch","zkteco","suprema","d link","dlink","apc","seagate","wd","polycab","finolex","honeywell","fortinet","sophos","cisco","aruba","tp link"]) if(t.includes(b)) return b;
  return "";
 }
+function compatibleUnit(a:string,b?:string|null){
+ const x=norm(a),y=norm(b);
+ if(!y||x===y)return true;
+ const groups=[["nos","no","pcs","piece","pieces","camera"],["meter","m","metre","meter"],["job"],["set"],["box"],["tb","terabyte","terabytes"],["point","points"]];
+ return groups.some(g=>g.includes(x)&&g.includes(y));
+}
+function semanticHints(item:Recommendation){
+ const s=norm([item.item_name,item.specification,item.subcategory].join(" "));
+ return {
+  dome:s.includes("dome"),
+  bullet:s.includes("bullet"),
+  cat6:s.includes("cat6"),
+  nvr:s.includes("nvr"),
+  poe:s.includes("poe"),
+  rj45:s.includes("rj45"),
+  patch:s.includes("patch"),
+  rack:s.includes("rack"),
+  ups:s.includes("ups"),
+  hdd:s.includes("hdd")||s.includes("storage"),
+  installation:s.includes("installation")||s.includes("configuration")||s.includes("laying")
+ };
+}
 function enrich(item:Recommendation,master:CatalogRow[],company:CatalogRow[],input:string){
- const qTokens=tokens([item.item_name,item.specification,input].join(" ")), brand=preferredBrand(input);
+ const brand=preferredBrand(input), hints=semanticHints(item);
  let best:CatalogRow|null=null,bestScore=0;
  for(const p of master.filter(x=>x.active!==false)){
-  const hay=tokens([p.category,p.subcategory,p.brand,p.model,p.name,p.specification].filter(Boolean).join(" "));
-  let score=0;
-  if(norm(p.category)===norm(item.category))score+=24;
-  if(p.subcategory&&item.subcategory&&norm(p.subcategory)===norm(item.subcategory))score+=28;
+  const pCategory=norm(p.category), pSub=norm(p.subcategory), iCategory=norm(item.category), iSub=norm(item.subcategory);
+  if(iCategory && pCategory && iCategory!==pCategory) continue;
+  if(iSub && pSub && iSub!==pSub && !(iSub.includes(pSub)||pSub.includes(iSub))) continue;
+  if(!compatibleUnit(item.unit,p.unit)) continue;
+  const hay=norm([p.category,p.subcategory,p.brand,p.model,p.name,p.specification].filter(Boolean).join(" "));
+  let score=30;
+  if(iSub && pSub===iSub) score+=35;
+  else if(iSub && (iSub.includes(pSub)||pSub.includes(iSub))) score+=15;
   if(brand&&norm(p.brand||"").includes(brand))score+=25;
-  for(const t of tokens(item.item_name))if(hay.has(t))score+=5;
-  let hits=0;for(const t of qTokens)if(hay.has(t))hits++;score+=Math.min(20,hits*2);
+  for(const t of tokens(item.item_name))if(hay.includes(t))score+=6;
+  for(const t of tokens(item.specification))if(hay.includes(t))score+=2;
+  if(hints.dome && hay.includes("dome")) score+=25;
+  if(hints.dome && hay.includes("bullet")) score-=40;
+  if(hints.bullet && hay.includes("bullet")) score+=25;
+  if(hints.bullet && hay.includes("dome")) score-=40;
+  if(hints.cat6 && hay.includes("cat6")) score+=15;
+  if(hints.nvr && hay.includes("nvr")) score+=20;
+  if(hints.poe && hay.includes("poe")) score+=15;
+  if(hints.rj45 && hay.includes("rj45")) score+=20;
+  if(hints.patch && hay.includes("patch")) score+=15;
+  if(hints.installation && !(hay.includes("installation")||hay.includes("configuration")||hay.includes("laying"))) score-=30;
   if(p.model&&norm(input).includes(norm(p.model)))score+=100;
   if(p.name&&norm(input).includes(norm(p.name)))score+=80;
   if(score>bestScore){bestScore=score;best=p;}
  }
- const matched=bestScore>=42?best:null;
+ const matched=bestScore>=55?best:null;
  const priced=matched?company.find(p=>p.active!==false&&(p.master_product_id===matched.id||(matched.model&&p.model===matched.model)||(matched.name&&norm(p.name)===norm(matched.name)))):null;
- return {...item,item_name:matched?.name||item.item_name,
+ return {...item,
+  item_name:matched?.name||item.item_name,
   specification:matched?[matched.brand,matched.model,matched.specification].filter(Boolean).join(" · "):item.specification,
-  unit:priced?.unit||matched?.unit||item.unit,unit_price:Number(priced?.selling_price||0),
+  unit:compatibleUnit(item.unit,matched?.unit)?(matched?.unit||item.unit):item.unit,
+  unit_price:priced&&compatibleUnit(item.unit,priced.unit)?Number(priced.selling_price||0):0,
   master_product_id:matched?.id||undefined,
-  notes:[item.reason,matched?"MASTER CATALOGUE: "+[matched.brand,matched.model,matched.name].filter(Boolean).join(" "):"MASTER CATALOGUE: no confident match",
-    priced?"COMPANY PRICE: ₹"+Number(priced.selling_price||0):"PRICE PENDING: add/activate in Product Catalogue or enter a manual rate.",
-    item.review_required?"ENGINEERING REVIEW: verify against site/drawing before final quotation.":""].filter(Boolean).join(" ")};
+  notes:[item.reason,
+    matched?"MASTER CATALOGUE: "+[matched.brand,matched.model,matched.name].filter(Boolean).join(" "):"MASTER CATALOGUE: no confident semantic match",
+    priced&&compatibleUnit(item.unit,priced.unit)?"COMPANY PRICE: ₹"+Number(priced.selling_price||0):"PRICE PENDING: add/activate a compatible unit price in Product Catalogue or enter a manual rate.",
+    item.review_required?"ENGINEERING REVIEW: verify against site/drawing before final quotation.":""].filter(Boolean).join(" ")
+ };
 }
 export function buildEngineeringBoq(input:string,master:CatalogRow[],company:CatalogRow[]){
  const result:Recommendation[]=[...recommendRequirement(input)], b=cameraBreakdown(input);
