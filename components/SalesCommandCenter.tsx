@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { recommendRequirement } from "../lib/recommendations";
 import { resolveCatalogProduct } from "../lib/catalogResolver";
+import { buildEngineeringBoq } from "../lib/boqEngine";
 
 
 type Lead = {
@@ -65,21 +66,48 @@ export default function SalesCommandCenter(){
  const [sendChannels,setSendChannels]=useState<("whatsapp"|"email")[]>(["whatsapp","email"]);
  const [sendProceed,setSendProceed]=useState(false);
  const [moduleView,setModuleView]=useState<"quotes"|"boq"|"followups"|null>(null);
+ const [leadActivities,setLeadActivities]=useState<any[]>([]);
+ const [leadWorkspaceQuotes,setLeadWorkspaceQuotes]=useState<any[]>([]);
+ const [leadWorkspaceBoq,setLeadWorkspaceBoq]=useState<any[]>([]);
+ const [workspaceLoading,setWorkspaceLoading]=useState(false);
  const [newLead,setNewLead]=useState({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});
 
+ async function resolveCompanyId(){
+   const {data:{user}}=await supabase.auth.getUser();
+   if(!user)return null;
+   const stored=localStorage.getItem("lead2sales_company_id");
+   if(stored){const {data:member}=await supabase.from("company_members").select("company_id").eq("user_id",user.id).eq("company_id",stored).maybeSingle();if(member)return stored;}
+   const {data:member}=await supabase.from("company_members").select("company_id").eq("user_id",user.id).order("created_at",{ascending:true}).limit(1).maybeSingle();
+   if(member?.company_id)localStorage.setItem("lead2sales_company_id",member.company_id);
+   return member?.company_id||null;
+ }
+ async function openLeadWorkspace(lead:Lead){
+   setSelectedLead(lead); setWorkspaceLoading(true);
+   const cid=await resolveCompanyId(); if(!cid){setWorkspaceLoading(false);return;}
+   const [{data:a},{data:q},{data:b}]=await Promise.all([
+     supabase.from("lead_activities").select("id,activity_type,note,created_at,user_id").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:false}),
+     supabase.from("quotations").select("id,quotation_no,status,subtotal,gst_amount,grand_total,created_at,updated_at").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:false}),
+     supabase.from("lead_boq_items").select("id,item_name,specification,quantity,unit,unit_price,notes,created_at").eq("company_id",cid).eq("lead_id",lead.id).order("created_at",{ascending:true})
+   ]);
+   setLeadActivities(a||[]);setLeadWorkspaceQuotes(q||[]);setLeadWorkspaceBoq(b||[]);setWorkspaceLoading(false);
+ }
+ async function logLeadActivity(leadId:string,type:string,note:string){
+   const cid=await resolveCompanyId(); if(!cid)return;
+   const {data:{user}}=await supabase.auth.getUser();
+   await supabase.from("lead_activities").insert({id:crypto.randomUUID(),company_id:cid,lead_id:leadId,user_id:user?.id||null,activity_type:type,note:note||null});
+ }
  async function load(){
    setLoading(true); setError("");
    const {data:{user}}=await supabase.auth.getUser();
    if(!user){router.replace("/login");return}
-   const cid=localStorage.getItem("lead2sales_company_id");
+   const cid=await resolveCompanyId();
    if(!cid){router.replace("/onboarding");return}
-   if(!cid){setError("Workspace not found.");setLoading(false);return}
    const [{data:co},{data:leadData,error:leadError},{data:quoteData}]=await Promise.all([
-     supabase.from("companies").select("name").eq("id",cid).maybeSingle(),
+     supabase.from("companies").select("name,legal_name").eq("id",cid).maybeSingle(),
      supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").eq("company_id",cid).order("created_at",{ascending:false}),
      supabase.from("quotations").select("id,quotation_no,status,grand_total,created_at,lead_id").eq("company_id",cid).order("created_at",{ascending:false})
    ]);
-   if(co?.name)setBusiness(co.name);
+   if(co?.name||co?.legal_name)setBusiness(co.name||co.legal_name||"Your Workspace");
    if(leadError)setError(leadError.message); else setLeads((leadData||[]) as Lead[]);
    setQuotes(quoteData||[]);
    setLoading(false);
