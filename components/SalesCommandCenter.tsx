@@ -279,13 +279,7 @@ export default function SalesCommandCenter(){
        const shareData=await shareRes.json().catch(()=>({}));
        if(!shareRes.ok)throw new Error(shareData.error||"Could not create WhatsApp quotation link.");
        shareUrl=shareData.shortUrl||shareData.url||"";
-       const msg="Dear "+boqLead.name+",\
-\
-Please find your quotation "+quoteNumber+" from "+business+".\
-\
-Quotation value: "+money(total)+".\
-\
-PDF: "+shareUrl;
+       const msg="Dear "+boqLead.name+"\n\nPlease find your quotation "+quoteNumber+" from "+business+".\n\nQuotation value: "+money(total)+".\n\nPDF: "+shareUrl;
        // WhatsApp's wa.me URL cannot attach a local file. On supported mobile browsers,
        // use the native share sheet so the exact generated PDF can be selected in WhatsApp
        // as an attachment. Fall back to the share link when file sharing is unavailable.
