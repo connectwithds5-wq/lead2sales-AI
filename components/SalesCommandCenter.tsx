@@ -11,7 +11,7 @@ import { buildEngineeringBoq } from "../lib/boqEngine";
 type Lead = {
   id:string; name:string; company_name:string|null; phone:string|null; email:string|null;
   requirement:string; status:string; estimated_value:number; created_at:string;
-  lead_category:string|null; next_follow_up_at?:string|null; source?:string|null;
+  lead_category:string|null; next_follow_up_at?:string|null; source?:string|null; follow_up_note?:string|null; last_contacted_at?:string|null;
 };
 
 const SOURCES = [
@@ -104,7 +104,7 @@ export default function SalesCommandCenter(){
    if(!cid){router.replace("/onboarding");return}
    const [{data:co},{data:leadData,error:leadError},{data:quoteData}]=await Promise.all([
      supabase.from("companies").select("name,legal_name").eq("id",cid).maybeSingle(),
-     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").eq("company_id",cid).order("created_at",{ascending:false}),
+     supabase.from("leads").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source,follow_up_note,last_contacted_at").eq("company_id",cid).order("created_at",{ascending:false}),
      supabase.from("quotations").select("id,quotation_no,status,grand_total,created_at,lead_id").eq("company_id",cid).order("created_at",{ascending:false})
    ]);
    if(co?.name||co?.legal_name)setBusiness(co.name||co.legal_name||"Your Workspace");
@@ -133,7 +133,7 @@ export default function SalesCommandCenter(){
    if(!cid||!newLead.name.trim()||!newLead.requirement.trim()){setError("Name and requirement are required.");return}
    setSavingLead(true); setError("");
    const payload={id:crypto.randomUUID(),company_id:cid,name:newLead.name.trim(),company_name:newLead.company_name.trim()||null,phone:newLead.phone.trim()||null,email:newLead.email.trim().toLowerCase()||null,requirement:newLead.requirement.trim(),estimated_value:Number(newLead.estimated_value||0),source:newLead.source,lead_category:newLead.lead_category,status:newLead.status,next_follow_up_at:newLead.next_follow_up_at?new Date(newLead.next_follow_up_at).toISOString():null};
-   const {data,error:insertError}=await supabase.from("leads").insert(payload).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
+   const {data,error:insertError}=await supabase.from("leads").insert(payload).select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source,follow_up_note,last_contacted_at").single();
    if(insertError)setError(insertError.message); else {setLeads([data as Lead,...leads]);setShowNewLead(false);setNewLead({name:"",company_name:"",phone:"",email:"",requirement:"",estimated_value:"",source:"manual",lead_category:"Other",status:"new",next_follow_up_at:""});}
    setSavingLead(false);
  }
