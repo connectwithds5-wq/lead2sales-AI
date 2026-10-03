@@ -157,10 +157,10 @@ export async function POST(request: NextRequest) {
             socketTimeout: 20000,
           });
           const info = await transport.sendMail({
-            from: \`\${smtp.sender_name ? \`\${smtp.sender_name} <\${smtp.email_address}>\` : smtp.email_address}\`,
+            from: `${smtp.sender_name ? `${smtp.sender_name} <${smtp.email_address}>` : smtp.email_address}`,
             to: recipient,
             replyTo: company?.email || smtp.email_address,
-            subject: \`Quotation \${quotation.quotation_no} — \${companyName}\`,
+            subject: `Quotation ${quotation.quotation_no} — ${companyName}`,
             html,
             attachments: [{ filename: finalFilename, content: Buffer.from(finalPdfBase64, "base64"), contentType: "application/pdf" }],
           });
