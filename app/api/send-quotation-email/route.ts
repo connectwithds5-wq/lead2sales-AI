@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import { decryptToken, encryptToken, base64Url, mimeHeader } from "../../../lib/gmail";
 
@@ -129,6 +130,47 @@ export async function POST(request: NextRequest) {
 
     if (gmailConnected) {
       return NextResponse.json({ error: "Gmail is connected but could not send the quotation. Please reconnect Gmail in Company Profile." }, { status: 502 });
+    }
+
+    // SMTP is the primary non-Gmail sender configured by the company.
+    if (serviceKey) {
+      const admin = createClient(supabaseUrl, serviceKey);
+      const { data: smtp } = await admin.from("email_connections")
+        .select("email_address,smtp_host,smtp_port,smtp_secure,smtp_username,smtp_password_encrypted,sender_name,enabled")
+        .eq("company_id", quotation.company_id)
+        .eq("provider", "smtp")
+        .eq("enabled", true)
+        .maybeSingle();
+
+      if (smtp) {
+        try {
+          if (!smtp.smtp_host || !smtp.smtp_port || !smtp.smtp_username || !smtp.smtp_password_encrypted) {
+            throw new Error("SMTP settings are incomplete. Open Company Profile and complete SMTP Email Sending.");
+          }
+          const transport = nodemailer.createTransport({
+            host: smtp.smtp_host,
+            port: Number(smtp.smtp_port),
+            secure: !!smtp.smtp_secure,
+            auth: { user: smtp.smtp_username, pass: decryptToken(smtp.smtp_password_encrypted) },
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 20000,
+          });
+          const info = await transport.sendMail({
+            from: \`\${smtp.sender_name ? \`\${smtp.sender_name} <\${smtp.email_address}>\` : smtp.email_address}\`,
+            to: recipient,
+            replyTo: company?.email || smtp.email_address,
+            subject: \`Quotation \${quotation.quotation_no} — \${companyName}\`,
+            html,
+            attachments: [{ filename: finalFilename, content: Buffer.from(finalPdfBase64, "base64"), contentType: "application/pdf" }],
+          });
+          transport.close();
+          return NextResponse.json({ ok: true, id: info.messageId || null, to: recipient, provider: "smtp" });
+        } catch (e) {
+          console.error("SMTP send failed:", e);
+          return NextResponse.json({ error: e instanceof Error ? e.message : "SMTP could not send the quotation." }, { status: 502 });
+        }
+      }
     }
 
     if (!apiKey || !from) {
