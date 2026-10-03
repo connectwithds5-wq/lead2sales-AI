@@ -359,6 +359,11 @@ export default function SalesCommandCenter(){
    const {data:latest}=await supabase.from("lead_boq_items").select("*").eq("company_id",cid).eq("lead_id",boqLead.id).order("created_at",{ascending:true});
    setBoqItems((latest||[]).map((x:any)=>({...x,__persisted:true}))); setLeadWorkspaceBoq(latest||[]); await logLeadActivity(boqLead.id,"boq_saved","BOQ changes saved by sales/engineering."); setBoqSaving(false);
  }
+ async function handleLogout(){
+   await supabase.auth.signOut();
+   localStorage.removeItem("lead2sales_company_id");
+   router.replace("/login");
+ }
  async function updateLead(patch:Partial<Lead>){
    if(!selectedLead)return;
    const {data,error:updateError}=await supabase.from("leads").update(patch).eq("id",selectedLead.id).eq("company_id",(await resolveCompanyId())||"").select("id,name,company_name,phone,email,requirement,status,estimated_value,created_at,lead_category,next_follow_up_at,source").single();
@@ -380,7 +385,7 @@ export default function SalesCommandCenter(){
        <button onClick={()=>setView("sources")}><span>⚡</span>Lead Sources</button>
      </nav>
      <div className="ccSidebarBottom">
-       <button onClick={()=>router.push("/company-profile")}><span>⚙</span>Settings</button>
+       <button onClick={()=>router.push("/company-profile")}><span>⚙</span>Settings</button>\n       <button className="ccGhost" onClick={handleLogout}><span>↪</span>Logout</button>
        <div className="ccWorkspaceBadge"><small>WORKSPACE</small><b>{business}</b></div>
      </div>
    </aside>
