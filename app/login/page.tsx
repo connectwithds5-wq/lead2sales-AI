@@ -46,6 +46,6 @@ export default function Login() {
       {message&&<div className="message">{message}</div>}
       <button className="primary full" disabled={loading}>{loading?"Please wait…":mode==="login"?"Sign in":"Create free account"}</button>
     </form>
-    <button className="switch" onClick={()=>{setMode(mode==="login"?"signup":"login");setMessage("")}}>{mode==="login"?"Need an account? Create one":"Already have an account? Sign in"}</button>
+    {mode==="login"&&<a className="switch" href="/forgot-password">Forgot password?</a>}\n    <button className="switch" onClick={()=>{setMode(mode==="login"?"signup":"login");setMessage("")}}>{mode==="login"?"Need an account? Create one":"Already have an account? Sign in"}</button>
   </div></main>;
 }
