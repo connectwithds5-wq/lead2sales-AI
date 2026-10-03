@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import nodemailer from "nodemailer";
+const nodemailer = require("nodemailer");
 import { decryptToken, encryptToken } from "../../../lib/gmail";
 
 async function getContext(request: NextRequest) {
