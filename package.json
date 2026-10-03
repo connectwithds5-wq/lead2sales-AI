@@ -15,13 +15,12 @@
     "html2pdf.js": "^0.10.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.3",
-    "nodemailer": "^7.0.10"
+    "nodemailer": "^10.0.13"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "typescript": "latest",
-    "@types/nodemailer": "^7.0.1"
+    "typescript": "latest"
   }
 }
