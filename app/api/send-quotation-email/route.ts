@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     if (serviceKey) {
       const admin = createClient(supabaseUrl, serviceKey);
       const { data: smtp } = await admin.from("email_connections")
-        .select("email_address,smtp_host,smtp_port,smtp_secure,smtp_username,smtp_password_encrypted,sender_name,enabled")
+        .select("email_address,smtp_host,smtp_port,smtp_secure,smtp_security,smtp_auth_method,smtp_username,smtp_password_encrypted,sender_name,enabled")
         .eq("company_id", quotation.company_id)
         .eq("provider", "smtp")
         .eq("enabled", true)
@@ -148,15 +148,20 @@ export async function POST(request: NextRequest) {
           if (!smtp.smtp_host || !smtp.smtp_port || !smtp.smtp_username || !smtp.smtp_password_encrypted) {
             throw new Error("SMTP settings are incomplete. Open Company Profile and complete SMTP Email Sending.");
           }
-          const transport = nodemailer.createTransport({
+          const security = smtp.smtp_security || (smtp.smtp_secure ? "ssl" : "starttls");
+          const transportOptions:any = {
             host: smtp.smtp_host,
             port: Number(smtp.smtp_port),
-            secure: !!smtp.smtp_secure,
-            auth: { user: smtp.smtp_username, pass: decryptToken(smtp.smtp_password_encrypted) },
+            secure: security === "ssl",
             connectionTimeout: 15000,
             greetingTimeout: 15000,
             socketTimeout: 20000,
-          });
+            auth: { user: smtp.smtp_username, pass: decryptToken(smtp.smtp_password_encrypted) },
+          };
+          if (security === "starttls") transportOptions.requireTLS = true;
+          if (security === "none") transportOptions.ignoreTLS = true;
+          if (smtp.smtp_auth_method && smtp.smtp_auth_method !== "auto") transportOptions.authMethod = String(smtp.smtp_auth_method).toUpperCase();
+          const transport = nodemailer.createTransport(transportOptions);
           const info = await transport.sendMail({
             from: `${smtp.sender_name ? `${smtp.sender_name} <${smtp.email_address}>` : smtp.email_address}`,
             to: recipient,
