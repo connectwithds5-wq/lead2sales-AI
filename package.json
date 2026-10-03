@@ -14,12 +14,14 @@
     "react-dom": "latest",
     "html2pdf.js": "^0.10.3",
     "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.3"
+    "jspdf": "^3.0.3",
+    "nodemailer": "^7.0.10"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "@types/nodemailer": "^7.0.1"
   }
 }
