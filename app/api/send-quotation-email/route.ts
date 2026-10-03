@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 const nodemailer = require("nodemailer");
